@@ -1,0 +1,41 @@
+<?xml version="1.0"?>
+<robot name="realsense2_camera" xmlns:xacro="http://ros.org/wiki/xacro">
+  <xacro:include filename="$(find realsense2_description)/urdf/_d435.urdf.xacro" />
+  
+  <link name="base_link" />
+  <xacro:sensor_d435 name="camera" topics_ns="camera" parent="base_link" publish_pointcloud="true">
+    <origin xyz="0 0 0" rpy="0 0 0" />
+  </xacro:sensor_d435>  
+
+  <!-- Disable gravity for all links in sensor_d435 -->
+  <gazebo reference="camera_bottom_screw_frame">
+    <gravity>false</gravity>
+  </gazebo>
+  <gazebo reference="camera_link">
+    <gravity>false</gravity>
+  </gazebo>
+  <gazebo reference="camera_depth_frame">
+    <gravity>false</gravity>
+  </gazebo>
+  <gazebo reference="camera_depth_optical_frame">
+    <gravity>false</gravity>
+  </gazebo>
+  <gazebo reference="camera_left_ir_frame">
+    <gravity>false</gravity>
+  </gazebo>
+  <gazebo reference="camera_left_ir_optical_frame">
+    <gravity>false</gravity>
+  </gazebo>
+  <gazebo reference="camera_right_ir_frame">
+    <gravity>false</gravity>
+  </gazebo>
+  <gazebo reference="camera_right_ir_optical_frame">
+    <gravity>false</gravity>
+  </gazebo>
+  <gazebo reference="camera_color_frame">
+    <gravity>false</gravity>
+  </gazebo>
+  <gazebo reference="camera_color_optical_frame">
+    <gravity>false</gravity>
+  </gazebo>
+</robot>
