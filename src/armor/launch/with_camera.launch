@@ -1,0 +1,52 @@
+<launch>
+
+    <!-- Arguments for the camera position -->
+    <arg name="camera_x" default="0.0"/>
+    <arg name="camera_y" default="0.0"/>
+    <arg name="camera_z" default="1.0"/>
+    <arg name="camera_roll" default="0.0"/>
+    <arg name="camera_pitch" default="0.0"/>
+    <arg name="camera_yaw" default="0.0"/>
+
+    <!-- Arguments from the desktop_gazebo_simulation.launch -->
+    <arg name="log_level" default="INFO" />
+    <arg name="hardware_version" default="ned" />
+    <arg name="debug" default="false"/>
+    <arg name="gripper_n_camera" default="true"/>
+    <arg name="simu_conveyor" default="true"/>
+    <arg name="gui" default="true"/>
+    <arg name="conf_location" default="version.txt"/>
+
+    <!-- Define ROS parameters and include the required launch files -->
+    <include file="$(find niryo_robot_bringup)/launch/niryo_$(arg hardware_version)_simulation.launch">
+        <arg name="simu_gripper" value="$(arg gripper_n_camera)"/>
+        <arg name="simu_conveyor" value="$(arg simu_conveyor)"/>
+        <arg name="log_level" value="$(arg log_level)" />
+        <arg name="debug" value="$(arg debug)"/>
+        <arg name="gazebo" value="true" />
+    </include>
+
+    <!-- Launching Gazebo World -->
+    <include file="$(find niryo_robot_gazebo)/launch/niryo_robot_gazebo_world.launch.xml">
+        <arg name="gui" value="$(arg gui)"/>
+    </include>
+
+    <!-- Load the RealSense D435 camera with specified position -->
+    <arg name="model" default="$(find realsense2_description)/urdf/test_d435_camera.urdf.xacro"/>
+    <param name="robot_description" command="$(find xacro)/xacro --inorder $(arg model)         use_nominal_extrinsics:=true add_plug:=true         camera_x:=$(arg camera_x)         camera_y:=$(arg camera_y)         camera_z:=$(arg camera_z)         camera_roll:=$(arg camera_roll)         camera_pitch:=$(arg camera_pitch)         camera_yaw:=$(arg camera_yaw)" />
+    
+    <node pkg="robot_state_publisher" type="robot_state_publisher"  name="realsense_robot_state_publisher">
+      <param name="publish_frequency" type="double" value="30.0" />
+    </node>
+
+    <!-- Include the Gazebo launch file for the RealSense camera -->
+    <include file="$(find realsense2_description)/launch/gazebo.launch">
+      <arg name="model" value="$(arg model)" />
+      <arg name="gui" value="$(arg gui)"/>
+      <arg name="gzname" default="realsense_gazebo"/>
+    </include>
+
+    <!-- Launch RViz -->
+    <node name="rviz" pkg="rviz" type="rviz" args="-d $(find realsense2_description)/rviz/urdf.rviz" required="true" />
+
+</launch>
