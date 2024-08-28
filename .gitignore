@@ -170,6 +170,8 @@ cython_debug/
 /rosdep/
 /build_isolated/
 
+/Cornell_dataset/
+
 .catkin_workspace
 
 # Test folders
