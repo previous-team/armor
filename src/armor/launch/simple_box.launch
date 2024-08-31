@@ -19,7 +19,7 @@ This will reduce the amount of time spent waiting during program shutdown
     <arg name="gui" default="true"/>
     <arg name="conf_location" default="version.txt"/>
 
-    <arg name="model" default="$(find armor)/URDF/camera.urdf"/>
+    <arg name="model" default="$(find armor)/URDF/realsense.urdf.xacro"/>
 
     <!-- robot description to load in rviz or gazebo -->
     <param name="realsense_robot_description" command="$(find xacro)/xacro $(arg model)" />

@@ -1,0 +1,57 @@
+<?xml version="1.0"?>
+
+<robot name="sensor_box" xmlns:xacro="http://ros.org/wiki/xacro">
+
+  <xacro:macro name="sensor_box" params="name:=camera topics_ns:=camera parent *origin publish_pointcloud:=true">
+    <xacro:property name="M_PI" value="3.1415926535897931" />
+
+    <!-- Simple box dimensions -->
+    <xacro:property name="box_width" value="0.1"/>
+    <xacro:property name="box_height" value="0.1"/>
+    <xacro:property name="box_depth" value="0.1"/>
+
+    <material name="${name}_color">
+      <color rgba="0.7 0.7 0.7 1"/>
+    </material>
+
+    <!-- Box joint -->
+    <joint name="${name}_joint" type="fixed">
+      <xacro:insert_block name="origin" />
+      <parent link="${parent}"/>
+      <child link="${name}_link" />
+    </joint>
+
+    <!-- Box link -->
+    <link name="${name}_link">
+      <visual>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <geometry>
+          <box size="${box_width} ${box_height} ${box_depth}"/>
+        </geometry>
+        <material name="${name}_color"/>
+      </visual>
+      <collision>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <geometry>
+          <box size="${box_width} ${box_height} ${box_depth}"/>
+        </geometry>
+      </collision>
+      <inertial>
+        <mass value="1.0" />
+        <origin xyz="0 0 0" />
+        <inertia ixx="0.001" ixy="0.0" ixz="0.0" iyy="0.001" iyz="0.0" izz="0.001" />
+      </inertial>
+    </link>
+
+    <!-- Realsense Gazebo Plugin -->
+    <xacro:gazebo_d435 camera_name="${name}" reference_link="${name}_link" topics_ns="${topics_ns}" depth_optical_frame="${name}_depth_optical_frame" color_optical_frame="${name}_color_optical_frame" infrared1_optical_frame="${name}_left_ir_optical_frame" infrared2_optical_frame="${name}_right_ir_optical_frame" publish_pointcloud="${publish_pointcloud}"/>
+
+    <!-- Additional frames needed by the plugin -->
+    <link name="${name}_depth_optical_frame"/>
+    <link name="${name}_color_optical_frame"/>
+    <link name="${name}_left_ir_optical_frame"/>
+    <link name="${name}_right_ir_optical_frame"/>
+
+  </xacro:macro>
+
+</robot>

@@ -30,7 +30,7 @@ class ROSCameraSubscriber:
     def rgb_callback(self, data):
         try:
            
-            self.rgb_image = self.bridge.imgmsg_to_cv2(data, desired_encoding="bgr8") # Convert ROS RGB image to a numpy array
+            self.rgb_image = self.bridge.imgmsg_to_cv2(data, desired_encoding="rgb8") # Convert ROS RGB image to a numpy array
         except CvBridgeError as e:
             rospy.logerr(f"Could not convert RGB image: {str(e)}")
 

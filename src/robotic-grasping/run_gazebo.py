@@ -47,10 +47,12 @@ if __name__ == '__main__':
     # Connect to Camera
     logging.info('Connecting to camera...')
     rospy.init_node('run_gazebo', anonymous=True)
+
     cam = ROSCameraSubscriber(
         depth_topic='/camera/depth/image_raw',  
         rgb_topic='/camera/color/image_raw'    
     )
+
     cam_data = CameraData(include_depth=args.use_depth, include_rgb=args.use_rgb)
 
     # Load Network
@@ -61,7 +63,6 @@ if __name__ == '__main__':
     else:
         net = torch.load(args.network, map_location=torch.device('cpu'))
 
-    #net = torch.load(args.network)
     logging.info('Done')
 
     # Get the compute device
@@ -78,32 +79,40 @@ if __name__ == '__main__':
             rgb = image_bundle['rgb']
             depth = image_bundle['aligned_depth']
 
+            # fig, ax = plt.subplots(1, 2, squeeze=False)
+            # ax[0, 0].imshow(rgb)
+            # m, s = np.nanmean(depth), np.nanstd(depth)
+            # ax[0, 1].imshow(depth.squeeze(axis=2), vmin=m - s, vmax=m + s, cmap=plt.cm.gray)
+            # ax[0, 0].set_title('RGB Image')
+            # ax[0, 1].set_title('Aligned Depth Image')
+
+            # plt.show()
           
            
 
             x, depth_img, rgb_img = cam_data.get_data(rgb=rgb, depth=depth)
+
             with torch.no_grad():
                 xc = x.to(device)
                 pred = net.predict(xc)
-
-                print("pred:",pred)
 
                 q_img, ang_img, width_img = post_process_output(pred['pos'], pred['cos'], pred['sin'], pred['width'])
 
 
                 plot_results(fig=fig,
                              rgb_img=cam_data.get_rgb(rgb, False),
-                             depth_img=np.squeeze(cam_data.get_depth(depth)),
+                             depth_img=np.squeeze(depth),
                              grasp_q_img=q_img,
                              grasp_angle_img=ang_img,
                              no_grasps=args.n_grasps,
                              grasp_width_img=width_img)
     finally:
-        save_results(
-            rgb_img=cam_data.get_rgb(rgb, False),
-            depth_img=np.squeeze(cam_data.get_depth(depth)),
-            grasp_q_img=q_img,
-            grasp_angle_img=ang_img,
-            no_grasps=args.n_grasps,
-            grasp_width_img=width_img
-        )
+        pass
+        # save_results(
+        #     rgb_img=cam_data.get_rgb(rgb, False),
+        #     depth_img=np.squeeze(cam_data.get_depth(depth)),
+        #     grasp_q_img=q_img,
+        #     grasp_angle_img=ang_img,
+        #     no_grasps=args.n_grasps,
+        #     grasp_width_img=width_img
+        # )

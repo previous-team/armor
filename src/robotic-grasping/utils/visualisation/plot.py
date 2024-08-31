@@ -40,7 +40,10 @@ def plot_results(
 
     if depth_img is not None:
         ax = fig.add_subplot(2, 3, 2)
-        ax.imshow(depth_img, cmap='gray')
+        #ax.imshow(depth_img, cmap='gray')
+        #ax.imshow(depth_img, cmap=plt.cm.gray)
+        m, s = np.nanmean(depth_img), np.nanstd(depth_img)
+        ax.imshow(depth_img, vmin=m - s, vmax=m + s, cmap=plt.cm.gray)
         ax.set_title('Depth')
         ax.axis('off')
 

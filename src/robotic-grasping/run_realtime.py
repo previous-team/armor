@@ -59,9 +59,13 @@ if __name__ == '__main__':
         fig = plt.figure(figsize=(10, 10))
         while True:
             image_bundle = cam.get_image_bundle()
+
             rgb = image_bundle['rgb']
+
             depth = image_bundle['aligned_depth']
+
             x, depth_img, rgb_img = cam_data.get_data(rgb=rgb, depth=depth)
+            
             with torch.no_grad():
                 xc = x.to(device)
                 pred = net.predict(xc)
@@ -69,6 +73,8 @@ if __name__ == '__main__':
                 print("pred:",pred)
 
                 q_img, ang_img, width_img = post_process_output(pred['pos'], pred['cos'], pred['sin'], pred['width'])
+
+                
 
                 plot_results(fig=fig,
                              rgb_img=cam_data.get_rgb(rgb, False),
