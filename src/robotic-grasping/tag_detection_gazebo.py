@@ -37,7 +37,7 @@ class CameraProcessor:
             # Convert to grayscale
             gray = cv2.cvtColor(self.rgb_image, cv2.COLOR_BGR2GRAY)
             # Apply a blur to reduce noise before edge detection
-            gray = cv2.medianBlur(gray, 5)
+            # gray = cv2.medianBlur(gray, 3)
 
             centers = []
 
@@ -46,11 +46,11 @@ class CameraProcessor:
                 gray, 
                 cv2.HOUGH_GRADIENT, 
                 dp=1,  # Inverse ratio of resolution
-                minDist=100,  # Minimum distance between detected centers
-                param1=50,  # Upper threshold for the internal Canny edge detector
-                param2=20,  # Threshold for center detection
-                minRadius=1,  # Minimum radius to be detected
-                maxRadius=15  # Maximum radius to be detected
+                minDist=75,  # Minimum distance between detected centers
+                param1=900,  # Upper threshold for the internal Canny edge detector
+                param2=10,  # Threshold for center detection
+                minRadius=7,  # Minimum radius to be detected
+                maxRadius=8  # Maximum radius to be detected
             )
 
             # If some circles are detected, draw them
@@ -84,9 +84,9 @@ class CameraProcessor:
             # Display the resulting image
             cv2.imshow("Processed RGB Image", self.rgb_image)
             
-        if self.depth_image is not None:
-            # Display the depth image
-            cv2.imshow("Depth Image", self.depth_image)
+        # if self.depth_image is not None:
+        #     # Display the depth image
+        #     cv2.imshow("Depth Image", self.depth_image)
 
         cv2.waitKey(1)
 
