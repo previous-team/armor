@@ -1,0 +1,57 @@
+<?xml version="1.0"?>
+
+<!--
+License: Apache 2.0. See LICENSE file in root directory.
+Copyright(c) 2017 Intel Corporation. All Rights Reserved
+
+This is the simplified URDF model for the Intel RealSense D435 camera.
+-->
+
+<robot name="sensor_d435" xmlns:xacro="http://ros.org/wiki/xacro">
+  <!--File includes-->
+  <xacro:include filename="$(find realsense2_description)/urdf/_d435.gazebo.xacro"/>
+
+  <xacro:macro name="sensor_d435" params="name:=camera topics_ns:=camera parent *origin publish_pointcloud:=true">
+    <xacro:property name="M_PI" value="3.1415926535897931" />
+  
+    <!-- Simplified box dimensions -->
+    <xacro:property name="d435_cam_width" value="0.090"/>
+    <xacro:property name="d435_cam_height" value="0.025"/>
+    <xacro:property name="d435_cam_depth" value="0.02505"/>
+
+    <material name="${name}_aluminum">
+      <color rgba="0.5 0.5 0.5 1"/>
+    </material>
+
+    <!-- Single box representing the camera -->
+    <joint name="${name}_joint" type="fixed">
+      <xacro:insert_block name="origin" />
+      <parent link="${parent}"/>
+      <child link="${name}_link" />
+    </joint>
+
+    <link name="${name}_link">
+      <visual>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <geometry>
+          <box size="${d435_cam_width} ${d435_cam_height} ${d435_cam_depth}"/>
+        </geometry>
+        <material name="${name}_aluminum"/>
+      </visual>
+      <collision>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <geometry>
+          <box size="${d435_cam_width} ${d435_cam_height} ${d435_cam_depth}"/>
+        </geometry>
+      </collision>
+      <inertial>
+        <mass value="0.564" />
+        <origin xyz="0 0 0" />
+        <inertia ixx="0.003881243" ixy="0.0" ixz="0.0" iyy="0.000498940" iyz="0.0" izz="0.003879257" />
+      </inertial>
+    </link>
+
+    <!-- Realsense Gazebo Plugin -->
+    <xacro:gazebo_d435 camera_name="${name}" reference_link="${name}_link" topics_ns="${topics_ns}" depth_optical_frame="${name}_link" color_optical_frame="${name}_link" infrared1_optical_frame="${name}_link" infrared2_optical_frame="${name}_link" publish_pointcloud="${publish_pointcloud}"/>
+  </xacro:macro>
+</robot>
