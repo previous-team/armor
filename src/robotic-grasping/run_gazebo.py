@@ -12,6 +12,7 @@ from hardware.device import get_device
 from inference.post_process import post_process_output
 from utils.data.camera_data import CameraData
 from utils.visualisation.plot import save_results, plot_results
+from utils.dataset_processing.grasp import Grasp,detect_grasps
 
 import rospy
 from sensor_msgs.msg import Image
@@ -19,8 +20,68 @@ from cv_bridge import CvBridge, CvBridgeError
 import matplotlib.pyplot as plt
 import numpy as np
 
+from skimage.feature import peak_local_max
+from utils.dataset_processing import image
 
 logging.basicConfig(level=logging.INFO)
+
+def get_z(img):
+    depth_img = image.Image(img)
+
+    width=640
+    height=480
+    output_size=224
+
+    left = (width - output_size) // 2
+    top = (height - output_size) // 2
+    right = (width + output_size) // 2
+    bottom = (height + output_size) // 2
+
+    bottom_right = (bottom, right)
+    top_left = (top, left)
+    depth_img.crop(bottom_right=bottom_right, top_left=top_left)
+    #depth_img.normalise()
+    # depth_img.resize((self.output_size, self.output_size))
+    depth_img.img = depth_img.img.transpose((2, 0, 1))
+    return depth_img.img
+
+def z_detect_grasps(depth,q_img, ang_img, width_img=None, no_grasps=1):
+    """
+    Detect grasps in a network output.
+    :param q_img: Q image network output
+    :param ang_img: Angle image network output
+    :param width_img: (optional) Width image network output
+    :param no_grasps: Max number of grasps to return
+    :return: list of Grasps
+    """
+    local_max = peak_local_max(q_img, min_distance=20, threshold_abs=0.2, num_peaks=no_grasps)
+
+    grasps = []
+    for grasp_point_array in local_max:
+        grasp_point = tuple(grasp_point_array)
+        
+        #print(grasp_point)
+        
+        cx,cy=grasp_point
+
+        print(f"Grasp point (cx, cy): ({cx}, {cy})")
+
+        depth_img=get_z(depth)
+        depth_img= depth_img[0] 
+        z=depth_img[cx,cy]
+        print("z:",z)
+
+
+        grasp_angle = ang_img[grasp_point]
+
+        g = Grasp(grasp_point, grasp_angle)
+        if width_img is not None:
+            g.length = width_img[grasp_point]
+            g.width = g.length / 2
+
+        grasps.append(g)
+
+    return grasp_point,z
 
 
 def parse_args():
@@ -78,18 +139,7 @@ if __name__ == '__main__':
 
             rgb = image_bundle['rgb']
             depth = image_bundle['aligned_depth']
-
-            # fig, ax = plt.subplots(1, 2, squeeze=False)
-            # ax[0, 0].imshow(rgb)
-            # m, s = np.nanmean(depth), np.nanstd(depth)
-            # ax[0, 1].imshow(depth.squeeze(axis=2), vmin=m - s, vmax=m + s, cmap=plt.cm.gray)
-            # ax[0, 0].set_title('RGB Image')
-            # ax[0, 1].set_title('Aligned Depth Image')
-
-            # plt.show()
-          
            
-
             x, depth_img, rgb_img = cam_data.get_data(rgb=rgb, depth=depth)
 
             with torch.no_grad():
@@ -97,11 +147,13 @@ if __name__ == '__main__':
                 pred = net.predict(xc)
 
                 q_img, ang_img, width_img = post_process_output(pred['pos'], pred['cos'], pred['sin'], pred['width'])
+                grasps=z_detect_grasps(depth,q_img, ang_img, width_img=None, no_grasps=1)
+                print(grasps)
 
 
                 plot_results(fig=fig,
                              rgb_img=cam_data.get_rgb(rgb, False),
-                             depth_img=np.squeeze(depth),
+                             depth_img=np.squeeze(cam_data.get_depth(depth)),
                              grasp_q_img=q_img,
                              grasp_angle_img=ang_img,
                              no_grasps=args.n_grasps,
