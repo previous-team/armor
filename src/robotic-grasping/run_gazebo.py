@@ -25,26 +25,14 @@ from utils.dataset_processing import image
 
 logging.basicConfig(level=logging.INFO)
 
-def get_z(img):
-    depth_img = image.Image(img)
-    depth_img.resize((480,640))
 
-    width=640
-    height=480
-    output_size=224
+def deproject_pixel_to_point(depth, pixel, ppx, ppy, fx, fy):
+    x = (pixel[0] - ppx) * depth / fx
+    y = (pixel[1] - ppy) * depth / fy
+    return x, y, depth
 
-    left = (width - output_size) // 2
-    top = (height - output_size) // 2
-    right = (width + output_size) // 2
-    bottom = (height + output_size) // 2
 
-    bottom_right = (bottom, right)
-    top_left = (top, left)
-    depth_img.crop(bottom_right=bottom_right, top_left=top_left)
-
-    return depth_img.img
-
-def z_detect_grasps(depth,q_img, ang_img, width_img=None, no_grasps=1):
+def z_detect_grasps(depth, q_img, ang_img, width_img=None, no_grasps=1):
     """
     Detect grasps in a network output.
     :param q_img: Q image network output
@@ -59,14 +47,7 @@ def z_detect_grasps(depth,q_img, ang_img, width_img=None, no_grasps=1):
     for grasp_point_array in local_max:
         grasp_point = tuple(grasp_point_array)
 
-        cx,cy=grasp_point
-
-        print(f"Grasp point (cx, cy): ({cx}, {cy})")
-
-        depth_img=get_z(depth)
-        z=depth_img[cx,cy]
-        print("z:",z)
-
+        cx,cy = grasp_point
 
         grasp_angle = ang_img[grasp_point]
 
@@ -77,12 +58,23 @@ def z_detect_grasps(depth,q_img, ang_img, width_img=None, no_grasps=1):
 
         grasps.append(g)
 
-    return grasp_point,z
+        z = depth[cx,cy]
+
+        fx = 161.7489881515503
+        fy = 215.4731855392456
+        ppx = 112.0
+        ppy = 112.0
+
+        x, y, z = deproject_pixel_to_point(z, (cx, cy), ppx, ppy, fx, fy)
+
+        print("Grasp at: ", x, y, z)
+
+    return grasps
 
 
 def parse_args():
     parser = argparse.ArgumentParser(description='Evaluate network')
-    parser.add_argument('--network', type=str, default='/home/sanraj/robotic-grasping/trained-models/cornell-randsplit-rgbd-grconvnet3-drop1-ch16/epoch_17_iou_0.96',
+    parser.add_argument('--network', type=str, default='robotic-grasping/trained-models/cornell-randsplit-rgbd-grconvnet3-drop1-ch16/epoch_17_iou_0.96',
                         help='Path to saved network to evaluate')
     parser.add_argument('--use-depth', type=int, default=1,
                         help='Use Depth image for evaluation (1/0)')
@@ -136,20 +128,20 @@ if __name__ == '__main__':
             rgb = image_bundle['rgb']
             depth = image_bundle['aligned_depth']
            
-            x, depth_img, rgb_img = cam_data.get_data(rgb=rgb, depth=depth)
+            x, depth_img, denormalised_depth, rgb_img = cam_data.get_data(rgb=rgb, depth=depth)
 
             with torch.no_grad():
                 xc = x.to(device)
                 pred = net.predict(xc)
 
                 q_img, ang_img, width_img = post_process_output(pred['pos'], pred['cos'], pred['sin'], pred['width'])
-                grasps=z_detect_grasps(depth,q_img, ang_img, width_img=None, no_grasps=1)
+                grasps=z_detect_grasps(denormalised_depth, q_img, ang_img, width_img=None, no_grasps=1)
                 print(grasps)
 
 
                 plot_results(fig=fig,
                              rgb_img=cam_data.get_rgb(rgb, False),
-                             depth_img=np.squeeze(cam_data.get_depth(depth)),
+                             depth_img=np.squeeze(denormalised_depth),
                              grasp_q_img=q_img,
                              grasp_angle_img=ang_img,
                              no_grasps=args.n_grasps,
