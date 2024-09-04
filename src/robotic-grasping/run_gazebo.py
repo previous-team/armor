@@ -10,7 +10,7 @@ import torch.utils.data
 from hardware.cam_gazebo import ROSCameraSubscriber
 from hardware.device import get_device
 from inference.post_process import post_process_output
-from utils.data.camera_data import CameraData
+from utils.data.camera_data_gazebo import CameraData
 from utils.visualisation.plot import save_results, plot_results
 from utils.dataset_processing.grasp import Grasp,detect_grasps
 
@@ -27,6 +27,7 @@ logging.basicConfig(level=logging.INFO)
 
 def get_z(img):
     depth_img = image.Image(img)
+    depth_img.resize((480,640))
 
     width=640
     height=480
@@ -40,9 +41,7 @@ def get_z(img):
     bottom_right = (bottom, right)
     top_left = (top, left)
     depth_img.crop(bottom_right=bottom_right, top_left=top_left)
-    #depth_img.normalise()
-    # depth_img.resize((self.output_size, self.output_size))
-    depth_img.img = depth_img.img.transpose((2, 0, 1))
+
     return depth_img.img
 
 def z_detect_grasps(depth,q_img, ang_img, width_img=None, no_grasps=1):
@@ -59,15 +58,12 @@ def z_detect_grasps(depth,q_img, ang_img, width_img=None, no_grasps=1):
     grasps = []
     for grasp_point_array in local_max:
         grasp_point = tuple(grasp_point_array)
-        
-        #print(grasp_point)
-        
+
         cx,cy=grasp_point
 
         print(f"Grasp point (cx, cy): ({cx}, {cy})")
 
         depth_img=get_z(depth)
-        depth_img= depth_img[0] 
         z=depth_img[cx,cy]
         print("z:",z)
 
@@ -158,13 +154,6 @@ if __name__ == '__main__':
                              grasp_angle_img=ang_img,
                              no_grasps=args.n_grasps,
                              grasp_width_img=width_img)
+                
     finally:
         pass
-        # save_results(
-        #     rgb_img=cam_data.get_rgb(rgb, False),
-        #     depth_img=np.squeeze(cam_data.get_depth(depth)),
-        #     grasp_q_img=q_img,
-        #     grasp_angle_img=ang_img,
-        #     no_grasps=args.n_grasps,
-        #     grasp_width_img=width_img
-        # )
