@@ -31,19 +31,14 @@
         </model> -->
 
         <!--CUBES-->
-        <model name='cube_blue'>
+        <!-- <model name='cube_blue'>
             <include>
                 <uri>model://cube_blue</uri>
             </include>
             <pose frame=''>0.25 0.0357 0.011 0.0 0.0 0.5</pose>
-        </model>
+        </model> -->
 
-        <model name='cube_blue1'>
-            <include>
-                <uri>model://cube_blue</uri>
-            </include>
-            <pose frame=''>0.35 0.0457 0.011 0.0 0.0 0.5</pose>
-        </model>
+        
 
         <model name='cube_red'>
             <include>
@@ -58,6 +53,63 @@
             </include>
             <pose frame=''>0.212 -0.0369 0.011 0 0 -0.3</pose>
         </model>
+
+        <model name='cube_green1'>
+            <include>
+                <uri>model://cube_green</uri>
+            </include>
+            <pose frame=''>0.275 0.0397 0.011 0.0 0.0 0.5</pose>
+        </model>
+
+        <model name='cube_green2'>
+            <include>
+                <uri>model://cube_green</uri>
+            </include>
+            <pose frame=''>0.25 0.0 0.011 0.0 0.0 0.6</pose>
+        </model>
+        <model name='cube_green3'>
+            <include>
+                <uri>model://cube_green</uri>
+            </include>
+            <pose frame=''>0.25 0.031 0.011 0.0 0.0 0.7</pose>
+        </model> 
+        <model name='cube_green4'>
+            <include>
+                <uri>model://cube_green</uri>
+            </include>
+            <pose frame=''>0.25 0.062 0.011 0.0 0.0 0.5</pose>
+        </model>
+        <model name='cube_green5'>
+            <include>
+                <uri>model://cube_green</uri>
+            </include>
+            <pose frame=''>0.25 0.093 0.011 0.0 0.0 0.5</pose>
+        </model>
+        <model name='cube_green6'>
+            <include>
+                <uri>model://cube_green</uri>
+            </include>
+            <pose frame=''>0.25 0.124 0.011 0.0 0.0 0.5</pose>
+        </model>
+        <model name='cube_green7'>
+            <include>
+                <uri>model://cube_green</uri>
+            </include>
+            <pose frame=''>0.25 0.155 0.011 0.0 0.0 0.5</pose>
+        </model>
+        <model name='cube_green8'>
+            <include>
+                <uri>model://cube_green</uri>
+            </include>
+            <pose frame=''>0.25 0.186 0.011 0.0 0.0 0.5</pose>
+        </model>
+        <model name='cube_green9'>
+            <include>
+                <uri>model://cube_green</uri>
+            </include>
+            <pose frame=''>0.25 0.217 0.011 0.0 0.0 0.5</pose>
+        </model>
+
         <physics name='default_physics' default='0' type='ode'>
             <max_step_size>0.001</max_step_size>
             <real_time_factor>1</real_time_factor>
