@@ -11,12 +11,13 @@ from hardware.cam_gazebo import ROSCameraSubscriber
 from hardware.device import get_device
 from inference.post_process import post_process_output
 from utils.data.camera_data_gazebo import CameraData
-from utils.visualisation.plot import save_results, plot_results
-from utils.dataset_processing.grasp import Grasp,detect_grasps
+from utils.visualisation.plot import plot_results
+from utils.dataset_processing.grasp import Grasp
 
 import rospy
 from sensor_msgs.msg import Image
 from cv_bridge import CvBridge, CvBridgeError
+from geometry_msgs.msg import PoseStamped
 import matplotlib.pyplot as plt
 import numpy as np
 
@@ -47,7 +48,7 @@ def z_detect_grasps(depth, q_img, ang_img, width_img=None, no_grasps=1):
     for grasp_point_array in local_max:
         grasp_point = tuple(grasp_point_array)
 
-        cx,cy = grasp_point
+        cy,cx = grasp_point  # Invert to reverse the transpose operation that is given to the network
 
         grasp_angle = ang_img[grasp_point]
 
@@ -58,23 +59,34 @@ def z_detect_grasps(depth, q_img, ang_img, width_img=None, no_grasps=1):
 
         grasps.append(g)
 
-        z = depth[cx,cy]
+        z = depth[cy, cx]
 
-        fx = 161.7489881515503
-        fy = 215.4731855392456
-        ppx = 112.0
-        ppy = 112.0
+        fx = 462.1379699707031
+        fy = 462.1379699707031
+        ppx = 111
+        ppy = 111
 
         x, y, z = deproject_pixel_to_point(z, (cx, cy), ppx, ppy, fx, fy)
 
         print("Grasp at: ", x, y, z)
+
+        # Publish the grasp point
+        grasp_msg = PoseStamped()
+        grasp_msg.header.stamp = rospy.Time.now()
+        grasp_msg.pose.position.x = x / 1000
+        grasp_msg.pose.position.y = y / 1000
+        grasp_msg.pose.position.z = z / 1000
+        
+        # Orientation will be published later
+
+        grasp_pub.publish(grasp_msg)
 
     return grasps
 
 
 def parse_args():
     parser = argparse.ArgumentParser(description='Evaluate network')
-    parser.add_argument('--network', type=str, default='robotic-grasping/trained-models/cornell-randsplit-rgbd-grconvnet3-drop1-ch16/epoch_17_iou_0.96',
+    parser.add_argument('--network', type=str, default='src/robotic-grasping/trained-models/cornell-randsplit-rgbd-grconvnet3-drop1-ch16/epoch_17_iou_0.96',
                         help='Path to saved network to evaluate')
     parser.add_argument('--use-depth', type=int, default=1,
                         help='Use Depth image for evaluation (1/0)')
@@ -103,6 +115,9 @@ if __name__ == '__main__':
     )
 
     cam_data = CameraData(include_depth=args.use_depth, include_rgb=args.use_rgb)
+
+    # Grasp point publisher
+    grasp_pub = rospy.Publisher('/grasp_point', PoseStamped, queue_size=10)
 
     # Load Network
     logging.info('Loading model...')
