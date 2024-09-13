@@ -59,8 +59,8 @@ def grasp_object_callback(msg):
 
     # Create the camera pose
     camera_pose = {
-        'position': np.array([0.6, 0, 0.5]),
-        'orientation': np.array([0.0000001, 0.959932, -3.141591])  # Euler angles (roll, pitch, yaw)
+        'position': np.array([0.25, 0, 0.55]),
+        'orientation': np.array([0.0000001, 1.57, -3.141591])  # Euler angles (roll, pitch, yaw)
     }
 
     # Convert the object position from the camera frame to the world frame
@@ -79,12 +79,15 @@ def niryo_robot_pick_object(robot, object_position):
     # Opening Gripper/Pushing Air
     robot.release_with_tool()
     # Going to pick pose
-    robot.move_pose(object_position[0], object_position[1], 0.095, 0.0, 1.57, 0)
+    robot.move_pose(object_position[0], object_position[1], 0.0999, 0.0, 1.57, 0)
 
     # Picking
     robot.grasp_with_tool()
 
-    rospy.sleep(2)
+    rospy.sleep(1)
+
+    # Home postion
+    robot.move_joints(0, 0.5, -1.25, 0, 0, 0)
 
     # Moving to place pose
     robot.move_pose(0.0, 0.2, 0.2, 0.0, 1.57, 0)
@@ -103,6 +106,9 @@ def main():
     # Connecting to the ROS Wrapper & calibrating if needed
     niryo_robot = NiryoRosWrapper()
     niryo_robot.calibrate_auto()
+
+    # Home postion
+    niryo_robot.move_joints(0, 0.5, -1.25, 0, 0, 0)
 
     # Subscribing to the grasp object topic
     rospy.Subscriber('/grasp_point', PoseStamped, grasp_object_callback)
