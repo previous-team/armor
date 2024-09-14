@@ -34,7 +34,7 @@ This will reduce the amount of time spent waiting during program shutdown
     </include>
 
     <!-- Launching Gazebo World -->
-    <include file="$(find niryo_robot_gazebo)/launch/niryo_robot_gazebo_world.launch.xml">
+    <include file="$(find armor)/launch/niryo_robot_gazebo_world.launch.xml">
         <arg name="gui" value="$(arg gui)"/>
     </include>
 
@@ -42,6 +42,6 @@ This will reduce the amount of time spent waiting during program shutdown
 
       <!-- push robot_description to factory and spawn robot in gazebo -->
       <node name="urdf_spawner" pkg="gazebo_ros" type="spawn_model"
-        args="-x 0.25 -y 0.0 -z 0.55 -P 1.57 -Y 3.14159 -unpause -urdf -model robot -param realsense_robot_description" respawn="false" output="screen" />
+        args="-x 0.3 -y 0.0 -z 0.55 -P 1.57 -Y 3.14159 -unpause -urdf -model robot -param realsense_robot_description" respawn="false" output="screen" />
 
 </launch>

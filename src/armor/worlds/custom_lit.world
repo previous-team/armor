@@ -1,0 +1,84 @@
+<sdf version='1.7'>
+  <world name='default'>
+    <scene>
+      <ambient>0 0 0 1</ambient>
+      <shadows>0</shadows>
+      <background>0.7 0.7 0.7 1</background>
+    </scene>
+    <!-- A global light source -->
+    <include>
+      <uri>model://sun</uri>
+    </include>
+    <!-- A ground plane -->
+    <include>
+      <uri>model://ground_plane</uri>
+    </include>
+
+
+    <!-- Cubes for Niryo Workspace -->
+    <model name='cube_red'>
+      <include>
+        <uri>model://cube_red</uri>
+      </include>
+      <pose frame=''>0.267 -0.062 0.011 0.0 0.0 0.1</pose>
+    </model>
+    <model name='cube_green'>
+      <include>
+        <uri>model://cube_green</uri>
+      </include>
+      <pose frame=''>0.212 -0.0369 0.011 0 0 -0.3</pose>
+    </model>
+    <model name='cube_green2'>
+      <include>
+        <uri>model://cube_green</uri>
+      </include>
+      <pose frame=''>0.25 0 0.011 0 -0 0.6</pose>
+    </model>
+
+
+    <physics name='default_physics' default='0' type='ode'>
+      <max_step_size>0.001</max_step_size>
+      <real_time_factor>1</real_time_factor>
+      <real_time_update_rate>1000</real_time_update_rate>
+    </physics>
+    <gui fullscreen='0'>
+      <camera name='user_camera'>
+        <pose frame=''>0.498673 -1.52506 0.903313 0 0.429798 1.824</pose>
+        <view_controller>orbit</view_controller>
+        <projection_type>perspective</projection_type>
+      </camera>
+    </gui>
+    <gravity>0 0 -9.8</gravity>
+    <magnetic_field>6e-06 2.3e-05 -4.2e-05</magnetic_field>
+    <atmosphere type='adiabatic'/>
+    <wind/>
+    <spherical_coordinates>
+      <surface_model>EARTH_WGS84</surface_model>
+      <latitude_deg>0</latitude_deg>
+      <longitude_deg>0</longitude_deg>
+      <elevation>0</elevation>
+      <heading_deg>0</heading_deg>
+    </spherical_coordinates>
+
+    <!-- SplotLight source -->
+    <light name='user_spot_light_0' type='spot'>
+      <pose>0.24066 -0.017779 1 0 -0 0</pose>
+      <diffuse>0.5 0.5 0.5 1</diffuse>
+      <specular>0.1 0.1 0.1 1</specular>
+      <direction>0 0 -1</direction>
+      <attenuation>
+        <range>20</range>
+        <constant>0.5</constant>
+        <linear>0.01</linear>
+        <quadratic>0.001</quadratic>
+      </attenuation>
+      <cast_shadows>0</cast_shadows>
+      <spot>
+        <inner_angle>0.6</inner_angle>
+        <outer_angle>1</outer_angle>
+        <falloff>1</falloff>
+      </spot>
+    </light>
+    
+  </world>
+</sdf>
