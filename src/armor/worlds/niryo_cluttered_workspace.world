@@ -15,22 +15,6 @@
             <uri>model://ground_plane</uri>
         </include>
 
-        <!-- Niryo Workspace -->
-        <model name='workspace_1'>
-            <include>
-                <uri>model://workspace_1</uri>
-            </include>
-            <pose frame=''>0.25 0.0 0.0005 0.0 0.0 0.0</pose>
-        </model>
-
-        <!-- Place Workspace -->
-        <!-- <model name='workspace_grille'>
-            <include>
-                <uri>model://workspace_grille</uri>
-            </include>
-            <pose frame=''>0.0 0.25 0.0005 0.0 0.0 1.57</pose>
-        </model> -->
-
         <!--CUBES-->
         <!-- <model name='cube_blue'>
             <include>
