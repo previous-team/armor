@@ -93,9 +93,6 @@ rosnode==1.16.0
 rosparam==1.16.0
 rospkg==1.5.1
 rospy==1.16.0
-rosserial-arduino==0.9.2
-rosserial-client==0.9.2
-rosserial-python==0.9.2
 rosservice==1.16.0
 rostest==1.16.0
 rostopic==1.16.0
