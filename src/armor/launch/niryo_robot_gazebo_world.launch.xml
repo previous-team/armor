@@ -6,9 +6,19 @@
     <arg name="gui" default="true"/>
     <arg name="headless" default="false"/>
     <arg name="debug" default="false"/>
+    <arg name="clutter" default="false"/>
 
-    <!-- We resume the logic in empty_world.launch, changing only the name of the world to be launched -->
-    <include file="$(find gazebo_ros)/launch/empty_world.launch">
+    <!-- Include the appropriate world file based on the 'clutter' argument -->
+    <include file="$(find gazebo_ros)/launch/empty_world.launch" if="$(arg clutter)">
+        <arg name="world_name" value="$(find armor)/worlds/niryo_cluttered_workspace.world"/>
+        <arg name="debug" value="$(arg debug)"/>
+        <arg name="gui" value="$(arg gui)"/>
+        <arg name="use_sim_time" value="$(arg use_sim_time)"/>
+        <arg name="headless" value="$(arg headless)"/>
+        <arg name="output" value="log"/>
+    </include>
+
+    <include file="$(find gazebo_ros)/launch/empty_world.launch" unless="$(arg clutter)">
         <arg name="world_name" value="$(find armor)/worlds/custom_lit.world"/>
         <arg name="debug" value="$(arg debug)"/>
         <arg name="gui" value="$(arg gui)"/>

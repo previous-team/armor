@@ -2,10 +2,12 @@
 
 import argparse
 import logging
+import math
 
 import matplotlib.pyplot as plt
 import numpy as np
 import torch.utils.data
+from tf.transformations import quaternion_from_euler
 
 from hardware.cam_gazebo import ROSCameraSubscriber
 from hardware.device import get_device
@@ -18,6 +20,7 @@ import rospy
 from sensor_msgs.msg import Image
 from cv_bridge import CvBridge, CvBridgeError
 from geometry_msgs.msg import PoseStamped
+
 import matplotlib.pyplot as plt
 import numpy as np
 
@@ -52,6 +55,10 @@ def z_detect_grasps(depth, q_img, ang_img, width_img=None, no_grasps=1):
 
         grasp_angle = ang_img[grasp_point]
 
+        print("Grasp angle:",math.degrees(grasp_angle))
+        
+        quaternion = quaternion_from_euler(0, 0, grasp_angle) #rotation about the z-axis
+
         g = Grasp(grasp_point, grasp_angle)
         if width_img is not None:
             g.length = width_img[grasp_point]
@@ -78,6 +85,10 @@ def z_detect_grasps(depth, q_img, ang_img, width_img=None, no_grasps=1):
         grasp_msg.pose.position.z = z / 1000
         
         # Orientation will be published later
+        grasp_msg.pose.orientation.x = quaternion[0]
+        grasp_msg.pose.orientation.y = quaternion[1]
+        grasp_msg.pose.orientation.z = quaternion[2]
+        grasp_msg.pose.orientation.w = quaternion[3]
 
         grasp_pub.publish(grasp_msg)
 
