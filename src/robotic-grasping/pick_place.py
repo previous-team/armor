@@ -25,7 +25,7 @@ def grasp_callback(msg):
     euler_angles = r.as_euler('xyz', degrees=False)
     x, y, z = object_position
     print(x,y,z)
-    niryo_robot.move_pose(x, y,z+0.07, 0.0, 1.57, euler_angles[2])
+    niryo_robot.move_pose(x, y,max(z+0.07,0.09), 0.0, 1.57, euler_angles[2])
     rospy.sleep(2)
     # Picking
     niryo_robot.grasp_with_tool()
