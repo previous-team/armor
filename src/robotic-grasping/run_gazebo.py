@@ -35,8 +35,26 @@ def deproject_pixel_to_point(depth, pixel, ppx, ppy, fx, fy):
     y = (pixel[1] - ppy) * depth / fy
     return x, y, depth
 
+def filter_grasps(grasps, img, red_thresh=0, green_thresh=-1, blue_thresh=-1):
+    """
+    Filter out grasps that are not on the object
+    :param grasps: list of Grasps
+    :param img: RGB Image # Shape: (3, 224, 224)
+    :param red_thresh: Red threshold
+    :param green_thresh: Green threshold
+    :param blue_thresh: Blue threshold
+    :return: list of Grasps
+    """
+    filtered_grasps = []
+    for g in grasps:
+        cy, cx = g.center
+        print(img[0, cy, cx])
+        if img[0, cy, cx] > red_thresh and img[1, cy, cx] > green_thresh and img[2, cy, cx] > blue_thresh:
+            filtered_grasps.append(g)
 
-def z_detect_grasps(depth, q_img, ang_img, width_img=None, no_grasps=1):
+    return filtered_grasps
+
+def z_detect_grasps(rgb_img, depth, q_img, ang_img, width_img=None, no_grasps=1):
     """
     Detect grasps in a network output.
     :param q_img: Q image network output
@@ -45,26 +63,31 @@ def z_detect_grasps(depth, q_img, ang_img, width_img=None, no_grasps=1):
     :param no_grasps: Max number of grasps to return
     :return: list of Grasps
     """
-    local_max = peak_local_max(q_img, min_distance=20, threshold_abs=0.2, num_peaks=no_grasps)
+    local_max = peak_local_max(q_img, min_distance=10, threshold_abs=0.1, num_peaks=no_grasps)
 
     grasps = []
     for grasp_point_array in local_max:
         grasp_point = tuple(grasp_point_array)
 
-        cy,cx = grasp_point  # Invert to reverse the transpose operation that is given to the network
-
-        grasp_angle = ang_img[grasp_point]
-
-        print("Grasp angle:",math.degrees(grasp_angle))
-        
-        quaternion = quaternion_from_euler(0, 0, grasp_angle) #rotation about the z-axis
-
-        g = Grasp(grasp_point, grasp_angle)
+        grasp = Grasp(grasp_point, ang_img[grasp_point])
         if width_img is not None:
-            g.length = width_img[grasp_point]
-            g.width = g.length / 2
+            grasp.length = width_img[grasp_point]
+            grasp.width = grasp.length / 2
 
-        grasps.append(g)
+        grasps.append(grasp)
+
+    filtered_grasps = filter_grasps(grasps, rgb_img)
+
+    for g in filtered_grasps:
+        print("Grasp at: ", g.center, g.angle)
+
+        cy,cx = g.center  # Invert to reverse the transpose operation that is given to the network
+
+        g.angle = g.angle
+
+        print("Grasp angle: ", math.degrees(g.angle))
+        
+        quaternion = quaternion_from_euler(0, 0, g.angle) #rotation about the z-axis
 
         z = depth[cy, cx]
 
@@ -92,7 +115,7 @@ def z_detect_grasps(depth, q_img, ang_img, width_img=None, no_grasps=1):
 
         grasp_pub.publish(grasp_msg)
 
-    return grasps
+    return filtered_grasps
 
 
 def parse_args():
@@ -161,8 +184,7 @@ if __name__ == '__main__':
                 pred = net.predict(xc)
 
                 q_img, ang_img, width_img = post_process_output(pred['pos'], pred['cos'], pred['sin'], pred['width'])
-                grasps=z_detect_grasps(denormalised_depth, q_img, ang_img, width_img=None, no_grasps=1)
-                print(grasps)
+                grasps=z_detect_grasps(rgb_img, denormalised_depth, q_img, ang_img, width_img=None, no_grasps=10)
 
 
                 plot_results(fig=fig,
@@ -170,7 +192,7 @@ if __name__ == '__main__':
                              depth_img=np.squeeze(denormalised_depth),
                              grasp_q_img=q_img,
                              grasp_angle_img=ang_img,
-                             no_grasps=args.n_grasps,
+                             no_grasps=10,
                              grasp_width_img=width_img)
                 
     finally:
