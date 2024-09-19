@@ -50,12 +50,15 @@ def camera_to_world(camera_coords, camera_pose):
 
     return world_coords
 
+
 def grasp_object_callback(msg):
-    # # Extract the position and orientation of the object
+    # Extract the position and orientation of the object
     # object_position = np.array([msg.pose.position.x, msg.pose.position.y, msg.pose.position.z])
     # # x is z; y is -x; z is -y
     object_position = np.array([msg.pose.position.z, -msg.pose.position.x, -msg.pose.position.y])
-    object_orientation = np.array([msg.pose.orientation.x, msg.pose.orientation.y, msg.pose.orientation.z, msg.pose.orientation.w])
+    object_orientation= np.array([msg.pose.orientation.x, msg.pose.orientation.y, msg.pose.orientation.z, msg.pose.orientation.w])
+
+
 
     # Create the camera pose
     camera_pose = {
@@ -63,23 +66,37 @@ def grasp_object_callback(msg):
         'orientation': np.array([0.0000001, 1.57, -3.141591])  # Euler angles (roll, pitch, yaw)
     }
 
+
     # Convert the object position from the camera frame to the world frame
     object_position_world = camera_to_world(object_position, camera_pose)
 
+    # Convert orientation from camera frame to world frame (assuming it's only yaw)
+    # Convert quaternion to Euler angles (roll, pitch, yaw)
+    
+    r = R.from_quat(object_orientation)
+    euler_angles = r.as_euler('xyz', degrees=False)
+
+    #no translation as robot z axis and camera z axis same
+
+    
+
+    # Add position and yaw to the buffer
     if len(grasp_point_buffer) < 3:
-        grasp_point_buffer.append(object_position_world)
+        grasp_point_buffer.append((object_position_world, euler_angles[2])) 
     else:
         grasp_point_buffer.pop(0)
-        grasp_point_buffer.append(object_position_world)
+        grasp_point_buffer.append((object_position_world, euler_angles[2]))
 
     print("Object Position (World Frame):", object_position_world)
+    print("Object Yaw (World Frame):", euler_angles[2])
 
-def niryo_robot_pick_object(robot, object_position):
+def niryo_robot_pick_object(robot, object_position, grasp_angle):
 
-    # Opening Gripper/Pushing Air
+    # Opening Gripper
     robot.release_with_tool()
-    # Going to pick pose
-    robot.move_pose(object_position[0], object_position[1], 0.09, 0.0, 1.57, 0)
+    
+    # Move to grasp pose (including yaw)
+    robot.move_pose(object_position[0], object_position[1], 0.09, 0.0, 1.57, grasp_angle)
 
     # Picking
     robot.grasp_with_tool()
@@ -91,6 +108,7 @@ def niryo_robot_pick_object(robot, object_position):
 
     # Moving to place pose
     robot.move_pose(0.0, 0.2, 0.2, 0.0, 1.57, 0)
+
     # Placing !
     robot.release_with_tool()
 
@@ -107,7 +125,7 @@ def main():
     niryo_robot = NiryoRosWrapper()
     niryo_robot.calibrate_auto()
 
-    # Home postion
+    # Home position
     niryo_robot.move_joints(0, 0.5, -1.25, 0, 0, 0)
 
     # Subscribing to the grasp object topic
@@ -116,9 +134,13 @@ def main():
     while not rospy.is_shutdown():
         if len(grasp_point_buffer) == 3:
             # Check if all the points are the same
-            if all(np.allclose(grasp_point_buffer[0], point) for point in grasp_point_buffer):
-                print("Grasping object at:", grasp_point_buffer[0])
-                niryo_robot_pick_object(niryo_robot, grasp_point_buffer[0])
+            if all(np.allclose(grasp_point_buffer[0][0], point[0]) for point in grasp_point_buffer):
+                print("Grasping object at:", grasp_point_buffer[0][0])
+                print("Grasp angle:", grasp_point_buffer[0][1])
+                
+                # Pass position and yaw to the pick function
+                niryo_robot_pick_object(niryo_robot, grasp_point_buffer[0][0], grasp_point_buffer[0][1])
+                
                 grasp_point_buffer.clear()
             rospy.sleep(1)
 
