@@ -4,8 +4,7 @@ from datetime import datetime
 import matplotlib.pyplot as plt
 import numpy as np
 
-from utils.dataset_processing.hardware_grasp import GraspDetector
-#from utils.dataset_processing.grasp import detect_grasps
+from utils.dataset_processing.grasp import detect_grasps
 
 warnings.filterwarnings("ignore")
 
@@ -30,8 +29,7 @@ def plot_results(
     :param grasp_width_img: (optional) Width output of network
     :return:
     """
-    grasp_detector = GraspDetector()
-    gs,grasp_point_640,grasp_angle = grasp_detector.detect_grasps(grasp_q_img, grasp_angle_img, width_img=grasp_width_img, no_grasps=no_grasps),grasp_detector.grasp_point_640,grasp_detector.grasp_angle
+    gs = detect_grasps(grasp_q_img, grasp_angle_img, width_img=grasp_width_img, no_grasps=no_grasps)
 
     plt.ion()
     plt.clf()
@@ -77,8 +75,6 @@ def plot_results(
     plt.pause(0.1)
     fig.canvas.draw()
 
-    return grasp_point_640,grasp_angle
-
 
 def plot_grasp(
         fig,
@@ -102,9 +98,8 @@ def plot_grasp(
     :param grasp_width_img: (optional) Width output of network
     :return:
     """
-    grasp_detector = GraspDetector()
     if grasps is None:
-        grasps = grasp_detector.detect_grasps(grasp_q_img, grasp_angle_img, width_img=grasp_width_img, no_grasps=no_grasps)
+        grasps = detect_grasps(grasp_q_img, grasp_angle_img, width_img=grasp_width_img, no_grasps=no_grasps)
 
     plt.ion()
     plt.clf()
@@ -135,8 +130,7 @@ def save_results(rgb_img, grasp_q_img, grasp_angle_img, depth_img=None, no_grasp
     :param grasp_width_img: (optional) Width output of network
     :return:
     """
-    grasp_detector = GraspDetector()
-    gs =grasp_detector.detect_grasps(grasp_q_img, grasp_angle_img, width_img=grasp_width_img, no_grasps=no_grasps)
+    gs = detect_grasps(grasp_q_img, grasp_angle_img, width_img=grasp_width_img, no_grasps=no_grasps)
 
     fig = plt.figure(figsize=(10, 10))
     plt.ion()
