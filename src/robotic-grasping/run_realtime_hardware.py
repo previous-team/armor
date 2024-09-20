@@ -7,12 +7,14 @@ import matplotlib.pyplot as plt
 import numpy as np
 import torch.utils.data
 from tf.transformations import quaternion_from_euler
+from skimage.feature import peak_local_max
 
-from hardware.camera import RealSenseCamera
+from hardware.armor_camera import RealSenseCamera
 from hardware.device import get_device
 from inference.post_process import post_process_output
 from utils.data.camera_data import CameraData
 from utils.visualisation.plot import save_results, plot_results
+from utils.dataset_processing.grasp import Grasp
 
 import cv2
 import cv2.aruco as aruco
@@ -24,9 +26,39 @@ import pyrealsense2 as rs
 logging.basicConfig(stream=sys.stdout,level=logging.INFO)
 
 
+def hardware_detect_grasps(q_img, ang_img, width_img=None, no_grasps=1):
+    """
+    Detect grasps in a network output.
+    :param q_img: Q image network output
+    :param ang_img: Angle image network output
+    :param width_img: (optional) Width image network output
+    :param no_grasps: Max number of grasps to return
+    :return: list of Grasps
+    """
+    local_max = peak_local_max(q_img, min_distance=20, threshold_abs=0.2, num_peaks=no_grasps)
+    # Crop offset from 640x480 to 224x224
+    crop_offset_x = 208  # (640 - 224) // 2
+    crop_offset_y = 128  # (480 - 224) // 2
+    grasps = []
+    for grasp_point_array in local_max:
+        grasp_point_224 = tuple(grasp_point_array)
+        print(f'grasp point for 224x224: {grasp_point_224[1], grasp_point_224[0]}')  # x, y
+        # Map grasp point back to 640x480 image
+        grasp_point_640 = (grasp_point_224[1] + crop_offset_x, grasp_point_224[0] + crop_offset_y)  # Updating class variable
+        print(f'grasp for 640x480: {grasp_point_640}')
+        
+        grasp_angle = ang_img[grasp_point_224]
+        g = Grasp(grasp_point_640, grasp_angle)
+        
+        if width_img is not None:
+            g.length = width_img[grasp_point_224]
+            g.width = g.length / 2
+        grasps.append(g)
+    return grasps
+
 def parse_args():
     parser = argparse.ArgumentParser(description='Evaluate network')
-    parser.add_argument('--network', type=str, default='/home/archanaa/armor/capstone_armor/src/robotic-grasping/trained-models/cornell-randsplit-rgbd-grconvnet3-drop1-ch16/epoch_17_iou_0.96',
+    parser.add_argument('--network', type=str, default='src/robotic-grasping/trained-models/cornell-randsplit-rgbd-grconvnet3-drop1-ch16/epoch_17_iou_0.96',
                         help='Path to saved network to evaluate')
     parser.add_argument('--use-depth', type=int, default=1,
                         help='Use Depth image for evaluation (1/0)')
@@ -178,46 +210,48 @@ if __name__ == '__main__':
 
                     q_img, ang_img, width_img = post_process_output(pred['pos'], pred['cos'], pred['sin'], pred['width'])
 
+                    grasps = hardware_detect_grasps(q_img, ang_img, width_img=None, no_grasps=1)
                 
-                    grasp_point_640,grasp_angle = plot_results(fig=fig,
-                                        rgb_img=cam_data.get_rgb(rgb, False),
-                                        depth_img=np.squeeze(cam_data.get_depth(depth)),
-                                        grasp_q_img=q_img,
-                                        grasp_angle_img=ang_img,
-                                        no_grasps=args.n_grasps,
-                                        grasp_width_img=width_img)
-                    ##Error might arise when object is outside the cropped image cuz grasp point wont be generated that time
-                    #but wont happen so much according to me
+                    plot_results(fig=fig,
+                                 rgb_img=cam_data.get_rgb(rgb, False),
+                                 depth_img=np.squeeze(cam_data.get_depth(depth)),
+                                 grasp_q_img=q_img,
+                                 grasp_angle_img=ang_img,
+                                 no_grasps=args.n_grasps,
+                                 grasp_width_img=width_img)
 
-                    object_in_camera_frame = pose_value_with_depth_compensation(grasp_point_640,depth_frame,depth_unexpanded,cam.intrinsics)
-                    if object_in_camera_frame is not None and transform_matrix is not None:
-                        object_in_aruco_frame = transform_object_to_bot(object_in_camera_frame, transform_matrix)
-                        T_x,T_y,T_z = -0.278,-0.014,0 #wrt aruco frame
-                        transform_bot = np.eye(4)
-                        tranform_bot = aruco_transformation_matrix(T_x,T_y,T_z)
-                        object_in_bot_frame = transform_object_to_bot(object_in_aruco_frame,tranform_bot)
-                        print(f"Object in ArUco marker frame: {object_in_aruco_frame}")
-                        print(f"Object in Bot frame: {object_in_bot_frame}")
-                        print(f'Grasp angle:',math.degrees(grasp_angle))#Angle in radians
+                    for grasp in grasps:
+                        grasp_point_640 = grasp.center
+                        grasp_angle = grasp.angle
+                        object_in_camera_frame = pose_value_with_depth_compensation(grasp_point_640, depth_frame, depth_unexpanded, cam.intrinsics)
+                        if object_in_camera_frame is not None and transform_matrix is not None:
+                            object_in_aruco_frame = transform_object_to_bot(object_in_camera_frame, transform_matrix)
+                            T_x,T_y,T_z = -0.278,-0.014,0 #wrt aruco frame
+                            transform_bot = np.eye(4)
+                            tranform_bot = aruco_transformation_matrix(T_x,T_y,T_z)
+                            object_in_bot_frame = transform_object_to_bot(object_in_aruco_frame,tranform_bot)
+                            print(f"Object in ArUco marker frame: {object_in_aruco_frame}")
+                            print(f"Object in Bot frame: {object_in_bot_frame}")
+                            print(f'Grasp angle:',math.degrees(grasp_angle))#Angle in radians
 
-                        quaternion = quaternion_from_euler(0,0,grasp_angle)
-                        rx,ry,rz = object_in_bot_frame
+                            quaternion = quaternion_from_euler(0,0,grasp_angle)
+                            rx,ry,rz = object_in_bot_frame
 
-                        # Publish to ROS topic
-                        grasp_msg = PoseStamped()
-                        grasp_msg.header.stamp = rospy.Time.now()
-                        grasp_msg.pose.position.x = rx
-                        grasp_msg.pose.position.y = ry
-                        grasp_msg.pose.position.z = rz
-                        print(f'pose stamped:::{rx,ry,rz}')
-                        # Orientation will be published later
-                        grasp_msg.pose.orientation.x = quaternion[0]
-                        grasp_msg.pose.orientation.y = quaternion[1]
-                        grasp_msg.pose.orientation.z = quaternion[2]
-                        grasp_msg.pose.orientation.w = quaternion[3]
+                            # Publish to ROS topic
+                            grasp_msg = PoseStamped()
+                            grasp_msg.header.stamp = rospy.Time.now()
+                            grasp_msg.pose.position.x = rx
+                            grasp_msg.pose.position.y = ry
+                            grasp_msg.pose.position.z = rz
+                            print(f'pose stamped:::{rx,ry,rz}')
+                            # Orientation will be published later
+                            grasp_msg.pose.orientation.x = quaternion[0]
+                            grasp_msg.pose.orientation.y = quaternion[1]
+                            grasp_msg.pose.orientation.z = quaternion[2]
+                            grasp_msg.pose.orientation.w = quaternion[3]
 
-                        grasp_pub.publish(grasp_msg)
-                        logging.info("published to object_pose topic")
+                            grasp_pub.publish(grasp_msg)
+                            logging.info("published to object_pose topic")
 
     finally:
         save_results(

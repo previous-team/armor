@@ -16,7 +16,7 @@ logging.basicConfig(level=logging.INFO)
 
 def parse_args():
     parser = argparse.ArgumentParser(description='Evaluate network')
-    parser.add_argument('--network', type=str, default='/home/archanaa/armor/Ned_niryo/src/armor/robotic-grasping/armor/src/robotic-grasping/trained-models/cornell-randsplit-rgbd-grconvnet3-drop1-ch16/epoch_17_iou_0.96',
+    parser.add_argument('--network', type=str, default='src/robotic-grasping/trained-models/cornell-randsplit-rgbd-grconvnet3-drop1-ch16/epoch_17_iou_0.96',
                         help='Path to saved network to evaluate')
     parser.add_argument('--use-depth', type=int, default=1,
                         help='Use Depth image for evaluation (1/0)')
@@ -37,7 +37,7 @@ if __name__ == '__main__':
 
     # Connect to Camera
     logging.info('Connecting to camera...')
-    cam = RealSenseCamera()
+    cam = RealSenseCamera(device_id=830112070066)
     cam.connect()
     cam_data = CameraData(include_depth=args.use_depth, include_rgb=args.use_rgb)
 
@@ -60,11 +60,11 @@ if __name__ == '__main__':
         while True:
             image_bundle = cam.get_image_bundle()
 
-            rgb = image_bundle['rgb'] #640X480
+            rgb = image_bundle['rgb']
 
-            depth = image_bundle['aligned_depth'] #640x480
+            depth = image_bundle['aligned_depth']
 
-            x, depth_img, rgb_img = cam_data.get_data(rgb=rgb, depth=depth) #returns 224x224 rgb and depth images
+            x, depth_img, rgb_img = cam_data.get_data(rgb=rgb, depth=depth)
             
             with torch.no_grad():
                 xc = x.to(device)

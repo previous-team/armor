@@ -12,7 +12,7 @@ class RealSenseCamera:
                  #device_id,
                  width=640,
                  height=480,
-                 fps=6):
+                 fps=6): #could increase the fps to 30 TODO check if 30 fps works good with the model
         #self.device_id = device_id
         self.width = width
         self.height = height
@@ -21,6 +21,9 @@ class RealSenseCamera:
         self.pipeline = None
         self.scale = None
         self.intrinsics = None
+        self.camera_matrix = None
+        self.distortion_matrix = None
+
 
     def connect(self):
         # Start and configure
@@ -38,6 +41,15 @@ class RealSenseCamera:
         # Determine depth scale
         self.scale = cfg.get_device().first_depth_sensor().get_depth_scale()
 
+        # Determine camera matrix
+        self.camera_matrix = np.array([[self.intrinsics.fx, 0, self.intrinsics.ppx],
+                                      [0, self.intrinsics.fy, self.intrinsics.ppy],
+                                      [0, 0, 1]])
+        
+        #Determine distortion matrix
+        self.distortion_matrix = np.array(self.intrinsics.coeffs)
+
+
     def get_image_bundle(self):
         frames = self.pipeline.wait_for_frames()
 
@@ -50,11 +62,13 @@ class RealSenseCamera:
         depth_image *= self.scale
         color_image = np.asanyarray(color_frame.get_data())
 
-        depth_image = np.expand_dims(depth_image, axis=2)
+        depth_image_exp = np.expand_dims(depth_image, axis=2)
 
         return {
             'rgb': color_image,
-            'aligned_depth': depth_image,
+            'aligned_depth': depth_image_exp,
+            'unexpanded_depth':depth_image,
+            'depth_frame':aligned_depth_frame
         }
 
     
