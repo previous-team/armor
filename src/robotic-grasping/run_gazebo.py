@@ -13,7 +13,7 @@ from hardware.cam_gazebo import ROSCameraSubscriber
 from hardware.device import get_device
 from inference.post_process import post_process_output
 from utils.data.camera_data_gazebo import CameraData
-from utils.visualisation.plot import plot_results
+from utils.visualisation.target_plot import plot_results
 from utils.dataset_processing.grasp import Grasp
 
 import rospy
@@ -193,7 +193,8 @@ if __name__ == '__main__':
                              grasp_q_img=q_img,
                              grasp_angle_img=ang_img,
                              no_grasps=10,
-                             grasp_width_img=width_img)
+                             grasp_width_img=width_img,
+                             grasps=grasps)
                 
     finally:
         pass
