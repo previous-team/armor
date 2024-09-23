@@ -1,0 +1,55 @@
+<?xml version="1.0"?>
+
+<robot name="simple_box">
+
+    <!-- Box Link -->
+    <link name="box_link">
+        <visual>
+            <geometry>
+                <box size="0.1 0.05 0.05"/> <!-- Dimensions of the box -->
+            </geometry>
+            <origin xyz="0 0 0" rpy="0 0 0"/>
+            <material name="gray"/>
+        </visual>
+        <collision>
+            <geometry>
+                <box size="0.1 0.05 0.05"/>
+            </geometry>
+            <origin xyz="0 0 0" rpy="0 0 0"/>
+        </collision>
+        <inertial>
+            <mass value="0.1"/> <!-- Approximate mass of the box -->
+            <origin xyz="0 0 0" rpy="0 0 0"/>
+            <inertia ixx="0.0001" ixy="0.0" ixz="0.0" iyy="0.0001" iyz="0.0" izz="0.0001"/>
+        </inertial>
+    </link>
+
+    <!-- Gazebo Plugin for the Box -->
+    <gazebo>
+        <plugin name="realsense_gazebo_plugin" filename="librealsense_gazebo_plugin.so">
+            <prefix>simple_box</prefix>
+            <depthUpdateRate>30.0</depthUpdateRate>
+            <colorUpdateRate>30.0</colorUpdateRate>
+            <infraredUpdateRate>30.0</infraredUpdateRate>
+            <depthTopicName>depth/image_raw</depthTopicName>
+            <depthCameraInfoTopicName>depth/camera_info</depthCameraInfoTopicName>
+            <colorTopicName>color/image_raw</colorTopicName>
+            <colorCameraInfoTopicName>color/camera_info</colorCameraInfoTopicName>
+            <infrared1TopicName>infra1/image_raw</infrared1TopicName>
+            <infrared1CameraInfoTopicName>infra1/camera_info</infrared1CameraInfoTopicName>
+            <infrared2TopicName>infra2/image_raw</infrared2TopicName>
+            <infrared2CameraInfoTopicName>infra2/camera_info</infrared2CameraInfoTopicName>
+            <colorOpticalframeName>color_optical_frame</colorOpticalframeName>
+            <depthOpticalframeName>depth_optical_frame</depthOpticalframeName>
+            <infrared1OpticalframeName>infrared1_optical_frame</infrared1OpticalframeName>
+            <infrared2OpticalframeName>infrared2_optical_frame</infrared2OpticalframeName>
+            <rangeMinDepth>0.2</rangeMinDepth>
+            <rangeMaxDepth>10.0</rangeMaxDepth>
+            <pointCloud>true</pointCloud>
+            <pointCloudTopicName>depth/color/points</pointCloudTopicName>
+            <pointCloudCutoff>0.25</pointCloudCutoff>
+            <pointCloudCutoffMax>9.0</pointCloudCutoffMax>
+        </plugin>
+    </gazebo>
+
+</robot>

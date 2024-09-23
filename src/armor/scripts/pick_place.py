@@ -21,13 +21,10 @@ niryo_robot.move_pose(0.2, 0.1, 0.1, 0.0, 1.57, 0)
 
 print(niryo_robot.get_pose(),type(niryo_robot.get_pose()))
 
-x = niryo_robot.get_pose().position.x
-
-print(x)
 # Picking
-# niryo_robot.grasp_with_tool()
+niryo_robot.grasp_with_tool()
 # Moving to place pose
-niryo_robot.move_pose(0.2, -0.1, 0.1, 0.0, 1.57, 0)
+niryo_robot.move_pose(0.0, 0.2, 0.2, 0.0, 1.57, 0)
 # Placing !
 niryo_robot.release_with_tool()
 

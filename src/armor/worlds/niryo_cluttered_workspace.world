@@ -1,0 +1,132 @@
+    <sdf version='1.7'>
+    <world name='default'>
+        <scene>
+            <ambient>0.0 0.0 0.0 1.0</ambient>
+            <shadows>0</shadows>
+            <background>0.7 0.7 0.7 1</background>
+        </scene>
+        <!-- A global light source -->
+        <include>
+            <uri>model://sun</uri>
+        </include>
+
+        <!-- A ground plane -->
+        <include>
+            <uri>model://ground_plane</uri>
+        </include>
+
+        <!--CUBES-->
+        <!-- <model name='cube_blue'>
+            <include>
+                <uri>model://cube_blue</uri>
+            </include>
+            <pose frame=''>0.25 0.0357 0.011 0.0 0.0 0.5</pose>
+        </model> -->
+
+        
+
+        <model name='cube_red'>
+            <include>
+                <uri>model://cube_red</uri>
+            </include>
+            <pose frame=''>0.251 0.00503 0.011 0.000183 0.0 0.750</pose>
+        </model>
+
+        <model name='cube_green'>
+            <include>
+                <uri>model://cube_green</uri>
+            </include>
+            <pose frame=''>0.2566 0.041363 0.011 0 0 0.41164</pose>
+        </model>
+
+        <model name='cube_green1'>
+            <include>
+                <uri>model://cube_green</uri>
+            </include>
+            <pose frame=''>0.279 0.0296 0.011 0.0 0.0 0.5</pose>
+        </model>
+
+        <model name='cube_green2'>
+            <include>
+                <uri>model://cube_green</uri>
+            </include>
+            <pose frame=''>0.25 0.0272 0.011 0.0 0.0 0.5326</pose>
+        </model>
+        <model name='cube_green3'>
+            <include>
+                <uri>model://cube_green</uri>
+            </include>
+            <pose frame=''>0.2199 0.031 0.011 -0.00036 0.0 0.5</pose>
+        </model> 
+        <model name='cube_green4'>
+            <include>
+                <uri>model://cube_green</uri>
+            </include>
+            <pose frame=''>0.24 -0.013 0.011 0.0 -0.000184 0.7153</pose>
+        </model>
+        <model name='cube_green5'>
+            <include>
+                <uri>model://cube_green</uri>
+            </include>
+            <pose frame=''>0.26666 -0.014079 0.011 0.0 0.000183 0.634</pose>
+        </model>
+        <model name='cube_green6'>
+            <include>
+                <uri>model://cube_green</uri>
+            </include>
+            <pose frame=''>0.291355 -0.011962 0.011 0.0 0.0 0.527</pose>
+        </model>
+        <model name='cube_green7'>
+            <include>
+                <uri>model://cube_green</uri>
+            </include>
+            <pose frame=''>0.2288 -0.039197 0.011 0.0 0.0 0.641550</pose>
+        </model>
+        <model name='cube_green8'>
+            <include>
+                <uri>model://cube_green</uri>
+            </include>
+            <pose frame=''>0.25 -0.052115 0.011 0.0 -0.000184 -0.5307</pose>
+        </model>
+        <model name='cube_green9'>
+            <include>
+                <uri>model://cube_green</uri>
+            </include>
+            <pose frame=''>0.2761 -0.042210 0.011 0.0 0.0 0.485</pose>
+        </model>
+
+        <physics name='default_physics' default='0' type='ode'>
+            <max_step_size>0.001</max_step_size>
+            <real_time_factor>1</real_time_factor>
+            <real_time_update_rate>1000</real_time_update_rate>
+        </physics>
+        <!--GUI-->
+        <gui fullscreen='0'>
+            <camera name='user_camera'>
+                <pose frame=''>0.198 -0.823 0.916 0 0.763 1.592</pose>
+                <view_controller>orbit</view_controller>
+                <projection_type>perspective</projection_type>
+            </camera>
+        </gui>
+        <!-- SplotLight source -->
+    <light name='user_spot_light_0' type='spot'>
+      <pose>0.24066 -0.017779 1 0 -0 0</pose>
+      <diffuse>0.5 0.5 0.5 1</diffuse>
+      <specular>0.1 0.1 0.1 1</specular>
+      <direction>0 0 -1</direction>
+      <attenuation>
+        <range>20</range>
+        <constant>0.5</constant>
+        <linear>0.01</linear>
+        <quadratic>0.001</quadratic>
+      </attenuation>
+      <cast_shadows>0</cast_shadows>
+      <spot>
+        <inner_angle>0.6</inner_angle>
+        <outer_angle>1</outer_angle>
+        <falloff>1</falloff>
+      </spot>
+    </light>
+
+    </world>
+</sdf>
