@@ -24,6 +24,7 @@ from geometry_msgs.msg import PoseStamped
 import matplotlib.pyplot as plt
 import numpy as np
 
+from scipy.spatial.transform import Rotation as R
 from skimage.feature import peak_local_max
 from utils.dataset_processing import image
 
@@ -33,8 +34,58 @@ logging.basicConfig(level=logging.INFO)
 def deproject_pixel_to_point(depth, pixel, ppx, ppy, fx, fy):
     x = (pixel[0] - ppx) * depth / fx
     y = (pixel[1] - ppy) * depth / fy
-    return x, y, depth
+    return np.array([x, y, depth])
 
+def camera_to_world(camera_coords, camera_pose):
+    """
+    Convert coordinates from camera frame to world frame.
+
+    :param camera_coords: numpy array of shape (3,), the (x, y, z) coordinates in the camera frame
+    :param camera_pose: dictionary with keys 'position' and 'orientation'
+                        'position' is a numpy array of shape (3,)
+                        'orientation' is a numpy array of shape (4,) for quaternion or (3,) for Euler angles
+    :return: numpy array of shape (3,), the (x, y, z) coordinates in the world frame
+    """
+    # Convert units to meters
+    camera_coords = camera_coords / 1000
+
+    # Apply the specific transformation: x becomes z, y becomes -x, z becomes -y
+    rotation_matrix_specific = np.array([
+        [0, 0, 1],
+        [-1, 0, 0],
+        [0, -1, 0]
+    ])
+    camera_coords_transformed = np.dot(rotation_matrix_specific, camera_coords)
+
+    # Extract position and orientation
+    position = camera_pose['position']
+    orientation = camera_pose['orientation']
+    
+    # Check if orientation is given as quaternion or Euler angles
+    if len(orientation) == 4:
+        # Quaternion to rotation matrix
+        rotation_matrix = R.from_quat(orientation).as_matrix()
+    elif len(orientation) == 3:
+        # Euler angles to rotation matrix
+        rotation_matrix = R.from_euler('xyz', orientation).as_matrix()
+    else:
+        raise ValueError("Orientation must be a quaternion (4,) or Euler angles (3,)")
+
+    # Create the homogeneous transformation matrix
+    transformation_matrix = np.eye(4)
+    transformation_matrix[:3, :3] = rotation_matrix
+    transformation_matrix[:3, 3] = position
+
+    # Convert camera coordinates to homogeneous coordinates
+    camera_coords_homogeneous = np.append(camera_coords_transformed, 1)
+
+    # Apply the transformation
+    world_coords_homogeneous = np.dot(transformation_matrix, camera_coords_homogeneous)
+
+    # Extract the world coordinates
+    world_coords = world_coords_homogeneous[:3]
+
+    return world_coords
 
 def z_detect_grasps(depth, q_img, ang_img, width_img=None, no_grasps=1):
     """
@@ -73,16 +124,25 @@ def z_detect_grasps(depth, q_img, ang_img, width_img=None, no_grasps=1):
         ppx = 111
         ppy = 111
 
-        x, y, z = deproject_pixel_to_point(z, (cx, cy), ppx, ppy, fx, fy)
+        object_position = deproject_pixel_to_point(z, (cx, cy), ppx, ppy, fx, fy)
+
+        # Create the camera pose
+        camera_pose = {
+            'position': np.array([0.3, 0, 0.55]),
+            'orientation': np.array([0.0000001, 1.57, -3.141591])  # Euler angles (roll, pitch, yaw)
+        }
+
+        # Convert the object position from the camera frame to the world frame
+        x, y, z = camera_to_world(object_position, camera_pose)
 
         print("Grasp at: ", x, y, z)
 
         # Publish the grasp point
         grasp_msg = PoseStamped()
         grasp_msg.header.stamp = rospy.Time.now()
-        grasp_msg.pose.position.x = x / 1000
-        grasp_msg.pose.position.y = y / 1000
-        grasp_msg.pose.position.z = z / 1000
+        grasp_msg.pose.position.x = x
+        grasp_msg.pose.position.y = y
+        grasp_msg.pose.position.z = z
         
         # Orientation will be published later
         grasp_msg.pose.orientation.x = quaternion[0]
@@ -118,6 +178,8 @@ if __name__ == '__main__':
 
     # Connect to Camera
     logging.info('Connecting to camera...')
+
+    # Initialize ROS node
     rospy.init_node('run_gazebo', anonymous=True)
 
     cam = ROSCameraSubscriber(
