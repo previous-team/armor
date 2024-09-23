@@ -20,6 +20,14 @@ def camera_to_world(camera_coords, camera_pose):
                         'orientation' is a numpy array of shape (4,) for quaternion or (3,) for Euler angles
     :return: numpy array of shape (3,), the (x, y, z) coordinates in the world frame
     """
+    # Apply the specific transformation: x becomes z, y becomes -x, z becomes -y
+    rotation_matrix_specific = np.array([
+        [0, 0, 1],
+        [-1, 0, 0],
+        [0, -1, 0]
+    ])
+    camera_coords_transformed = np.dot(rotation_matrix_specific, camera_coords)
+
     # Extract position and orientation
     position = camera_pose['position']
     orientation = camera_pose['orientation']
@@ -40,7 +48,7 @@ def camera_to_world(camera_coords, camera_pose):
     transformation_matrix[:3, 3] = position
 
     # Convert camera coordinates to homogeneous coordinates
-    camera_coords_homogeneous = np.append(camera_coords, 1)
+    camera_coords_homogeneous = np.append(camera_coords_transformed, 1)
 
     # Apply the transformation
     world_coords_homogeneous = np.dot(transformation_matrix, camera_coords_homogeneous)
@@ -53,12 +61,8 @@ def camera_to_world(camera_coords, camera_pose):
 
 def grasp_object_callback(msg):
     # Extract the position and orientation of the object
-    # object_position = np.array([msg.pose.position.x, msg.pose.position.y, msg.pose.position.z])
-    # # x is z; y is -x; z is -y
-    object_position = np.array([msg.pose.position.z, -msg.pose.position.x, -msg.pose.position.y])
-    object_orientation= np.array([msg.pose.orientation.x, msg.pose.orientation.y, msg.pose.orientation.z, msg.pose.orientation.w])
-
-
+    object_position = np.array([msg.pose.position.x, msg.pose.position.y, msg.pose.position.z])
+    object_orientation = np.array([msg.pose.orientation.x, msg.pose.orientation.y, msg.pose.orientation.z, msg.pose.orientation.w])
 
     # Create the camera pose
     camera_pose = {
@@ -66,19 +70,13 @@ def grasp_object_callback(msg):
         'orientation': np.array([0.0000001, 1.57, -3.141591])  # Euler angles (roll, pitch, yaw)
     }
 
-
     # Convert the object position from the camera frame to the world frame
     object_position_world = camera_to_world(object_position, camera_pose)
 
     # Convert orientation from camera frame to world frame (assuming it's only yaw)
     # Convert quaternion to Euler angles (roll, pitch, yaw)
-    
     r = R.from_quat(object_orientation)
     euler_angles = r.as_euler('xyz', degrees=False)
-
-    #no translation as robot z axis and camera z axis same
-
-    
 
     # Add position and yaw to the buffer
     if len(grasp_point_buffer) < 3:
