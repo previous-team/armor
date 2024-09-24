@@ -15,6 +15,7 @@ from inference.post_process import post_process_output
 from utils.data.camera_data import CameraData
 from utils.visualisation.plot import save_results, plot_results
 from utils.dataset_processing.grasp import Grasp
+from utils.dataset_processing.grasp import hardware_detect_grasps
 
 import cv2
 import cv2.aruco as aruco
@@ -24,37 +25,6 @@ from geometry_msgs.msg import PoseStamped
 import pyrealsense2 as rs
 
 logging.basicConfig(stream=sys.stdout,level=logging.INFO)
-
-
-def hardware_detect_grasps(q_img, ang_img, width_img=None, no_grasps=1):
-    """
-    Detect grasps in a network output.
-    :param q_img: Q image network output
-    :param ang_img: Angle image network output
-    :param width_img: (optional) Width image network output
-    :param no_grasps: Max number of grasps to return
-    :return: list of Grasps
-    """
-    local_max = peak_local_max(q_img, min_distance=20, threshold_abs=0.2, num_peaks=no_grasps)
-    # Crop offset from 640x480 to 224x224
-    crop_offset_x = 208  # (640 - 224) // 2
-    crop_offset_y = 128  # (480 - 224) // 2
-    grasps = []
-    for grasp_point_array in local_max:
-        grasp_point_224 = tuple(grasp_point_array)
-        print(f'grasp point for 224x224: {grasp_point_224[1], grasp_point_224[0]}')  # x, y
-        # Map grasp point back to 640x480 image
-        grasp_point_640 = (grasp_point_224[1] + crop_offset_x, grasp_point_224[0] + crop_offset_y)  # Updating class variable
-        print(f'grasp for 640x480: {grasp_point_640}')
-        
-        grasp_angle = ang_img[grasp_point_224]
-        g = Grasp(grasp_point_640, grasp_angle)
-        
-        if width_img is not None:
-            g.length = width_img[grasp_point_224]
-            g.width = g.length / 2
-        grasps.append(g)
-    return grasps
 
 def parse_args():
     parser = argparse.ArgumentParser(description='Evaluate network')
@@ -156,7 +126,6 @@ def pose_value_with_depth_compensation(grasp_point_640,depth_frame,depth_image,i
     y = (cy - intrinsics.ppy) / intrinsics.fy * depth_value
     return [x,y,depth_value]
 
-    
 
 
 if __name__ == '__main__':
@@ -210,19 +179,24 @@ if __name__ == '__main__':
 
                     q_img, ang_img, width_img = post_process_output(pred['pos'], pred['cos'], pred['sin'], pred['width'])
 
-                    grasps = hardware_detect_grasps(q_img, ang_img, width_img=None, no_grasps=1)
+                    # grasps = hardware_detect_grasps(q_img, ang_img, width_img, no_grasps=1,img=rgb_img)
                 
-                    plot_results(fig=fig,
+                    grasps,grasp_param= plot_results(fig=fig,
                                  rgb_img=cam_data.get_rgb(rgb, False),
                                  depth_img=np.squeeze(cam_data.get_depth(depth)),
                                  grasp_q_img=q_img,
                                  grasp_angle_img=ang_img,
                                  no_grasps=args.n_grasps,
                                  grasp_width_img=width_img)
-
+                
+                                    
                     for grasp in grasps:
-                        grasp_point_640 = grasp.center
+                        grasp_point_224 = grasp.center
                         grasp_angle = grasp.angle
+                        crop_offset_x = 208  # (640 - 224) // 2
+                        crop_offset_y = 128  # (480 - 224) // 2
+                        grasp_point_640 = (grasp_point_224[1] + crop_offset_x, grasp_point_224[0] + crop_offset_y)
+                        print(f'Grasp point for 640x480: {grasp_point_640}')
                         object_in_camera_frame = pose_value_with_depth_compensation(grasp_point_640, depth_frame, depth_unexpanded, cam.intrinsics)
                         if object_in_camera_frame is not None and transform_matrix is not None:
                             object_in_aruco_frame = transform_object_to_bot(object_in_camera_frame, transform_matrix)

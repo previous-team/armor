@@ -2,6 +2,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from skimage.draw import polygon
 from skimage.feature import peak_local_max
+import cv2
 
 
 def _gr_text_to_no(l, offset=(0, 0)):
@@ -441,3 +442,61 @@ def detect_grasps(q_img, ang_img, width_img=None, no_grasps=1):
         grasps.append(g)
 
     return grasps
+
+
+def graspability_check(grasp_image,grasp_point_224):
+    grasp_param = None
+    gray_image = cv2.cvtColor(grasp_image, cv2.COLOR_BGR2GRAY)
+    _, binary_image = cv2.threshold(gray_image, 127, 255, cv2.THRESH_BINARY)
+    contours, _ = cv2.findContours(binary_image, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    contour_image = np.zeros_like(grasp_image)
+    cv2.drawContours(contour_image, contours, -1, (0, 255, 0), 2)
+    return grasp_param,contour_image
+    
+
+def hardware_detect_grasps(q_img, ang_img, width_img=None, no_grasps=1,img=None):
+    """
+    Detect grasps in a network output.
+    :param q_img: Q image network output
+    :param ang_img: Angle image network output
+    :param width_img: (optional) Width image network output
+    :param no_grasps: Max number of grasps to return
+    :return: list of Grasps
+    """
+    local_max = peak_local_max(q_img, min_distance=20, threshold_abs=0.2, num_peaks=no_grasps)
+    
+    grasps = []
+    masked_img = np.zeros_like(img) if img is not None else None  # Initialize masked_img
+    contour_img = np.zeros_like(img) if img is not None else None
+    grasp_param = None
+    for grasp_point_array in local_max:
+        grasp_point_224 = tuple(grasp_point_array)
+        print(f'grasp point for 224x224: {grasp_point_224}')  
+       
+        grasp_angle = ang_img[grasp_point_224]
+        print(f'Grasp angle:{grasp_angle}')
+
+        # Create a Grasp object
+        g = Grasp(grasp_point_224, grasp_angle)
+        if width_img is not None:
+            g.length = width_img[grasp_point_224]
+            g.width = g.length / 2
+
+        # Convert the Grasp to a GraspRectangle
+        grasp_rectangle = g.as_gr
+
+        # Create a mask for the grasp rectangle region
+        rr, cc = grasp_rectangle.polygon_coords(masked_img.shape[:2])
+        if img is not None:
+            mask = np.zeros(masked_img.shape[:2], dtype=np.uint8)
+            mask[rr, cc] = 255  #the rectangle area
+            masked_img[rr, cc] = img[rr, cc] #retaining only rectangle area
+
+        grasps.append(g)
+
+        # added cuz sometimes masked image becomes none i.e. usually happens when no rectangle is detected
+        if masked_img is None:
+            masked_img = np.zeros((224, 224, 3), dtype=np.uint8)  # Fallback to a black image
+        grasp_param,contour_img = graspability_check(masked_img,grasp_point_224)
+
+    return grasps,masked_img,contour_img,grasp_param

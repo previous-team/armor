@@ -4,7 +4,7 @@ from datetime import datetime
 import matplotlib.pyplot as plt
 import numpy as np
 
-from utils.dataset_processing.grasp import detect_grasps
+from utils.dataset_processing.grasp import detect_grasps,hardware_detect_grasps
 
 warnings.filterwarnings("ignore")
 
@@ -29,17 +29,19 @@ def plot_results(
     :param grasp_width_img: (optional) Width output of network
     :return:
     """
-    gs = detect_grasps(grasp_q_img, grasp_angle_img, width_img=grasp_width_img, no_grasps=no_grasps)
+
+    gs,grasp_image,contour_img,grasp_param = hardware_detect_grasps(grasp_q_img, grasp_angle_img, width_img=None, no_grasps=no_grasps,img=rgb_img)
+
 
     plt.ion()
     plt.clf()
-    ax = fig.add_subplot(2, 3, 1)
+    ax = fig.add_subplot(3, 3, 1)
     ax.imshow(rgb_img)
     ax.set_title('RGB')
     ax.axis('off')
 
     if depth_img is not None:
-        ax = fig.add_subplot(2, 3, 2)
+        ax = fig.add_subplot(3, 3, 2)
         #ax.imshow(depth_img, cmap='gray')
         #ax.imshow(depth_img, cmap=plt.cm.gray)
         m, s = np.nanmean(depth_img), np.nanstd(depth_img)
@@ -47,34 +49,48 @@ def plot_results(
         ax.set_title('Depth')
         ax.axis('off')
 
-    ax = fig.add_subplot(2, 3, 3)
+    ax = fig.add_subplot(3, 3, 3)
     ax.imshow(rgb_img)
     for g in gs:
         g.plot(ax)
     ax.set_title('Grasp')
     ax.axis('off')
 
-    ax = fig.add_subplot(2, 3, 4)
+    ax = fig.add_subplot(3, 3, 4)
     plot = ax.imshow(grasp_q_img, cmap='jet', vmin=0, vmax=1)
     ax.set_title('Q')
     ax.axis('off')
     plt.colorbar(plot)
 
-    ax = fig.add_subplot(2, 3, 5)
+    ax = fig.add_subplot(3, 3, 5)
     plot = ax.imshow(grasp_angle_img, cmap='hsv', vmin=-np.pi / 2, vmax=np.pi / 2)
     ax.set_title('Angle')
     ax.axis('off')
     plt.colorbar(plot)
 
-    ax = fig.add_subplot(2, 3, 6)
+    ax = fig.add_subplot(3, 3, 6)
     plot = ax.imshow(grasp_width_img, cmap='jet', vmin=0, vmax=100)
     ax.set_title('Width')
     ax.axis('off')
     plt.colorbar(plot)
 
+    ax = fig.add_subplot(3, 3, 7)
+    ax.imshow(grasp_image)
+    for g in gs:
+        g.plot(ax)
+    ax.set_title('Grasp rectangle')
+    ax.axis('off')
+
+    ax = fig.add_subplot(3, 3, 8)
+    ax.imshow(contour_img)
+    for g in gs:
+        g.plot(ax)
+    ax.set_title('Rectangle contour')
+    ax.axis('off')
+
     plt.pause(0.1)
     fig.canvas.draw()
-
+    return gs,grasp_param
 
 def plot_grasp(
         fig,
