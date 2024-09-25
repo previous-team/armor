@@ -87,24 +87,89 @@ def camera_to_world(camera_coords, camera_pose):
 
     return world_coords
 
-def filter_grasps(grasps, img, red_thresh=0, green_thresh=-1, blue_thresh=-1):
+def draw_rectangle(center, angle, length, width):
+
+    length=40
+    width=20
+    xo = np.cos(angle)
+    yo = np.sin(angle)
+
+    y1 = center[0] + length / 2 * yo
+    x1 = center[1] - length / 2 * xo
+    y2 = center[0] - length / 2 * yo
+    x2 = center[1] + length / 2 * xo
+
+    return (np.array(
+        [
+            [y1 - width / 2 * xo, x1 - width / 2 * yo],
+            [y2 - width / 2 * xo, x2 - width / 2 * yo],
+            [y1 + width / 2 * xo, x1 + width / 2 * yo],
+            [y2 + width / 2 * xo, x2 + width / 2 * yo],
+            
+        ]
+    ).astype(float))
+        
+def sample_points_along_line(p1, p2, num_points=10):
     """
-    Filter out grasps that are not on the object
+    Generate `num_points` evenly spaced points between p1 and p2.
+    """
+    return np.linspace(p1, p2, num_points)
+
+def filter_grasps(grasps, img, depth_img, red_thresh=0, green_thresh=-1, blue_thresh=-1, num_depth_checks=10):
+    """
+    Filter out grasps that are not on the object or obstructed by depth.
     :param grasps: list of Grasps
-    :param img: RGB Image # Shape: (3, 224, 224)
+    :param img: RGB Image # Shape: (3, H, W)
+    :param depth_img: Depth Image # Shape: (H, W)
     :param red_thresh: Red threshold
     :param green_thresh: Green threshold
     :param blue_thresh: Blue threshold
+    :param num_depth_checks: Number of depth checks from the center to the edge
     :return: list of Grasps
     """
     filtered_grasps = []
     for g in grasps:
         cy, cx = g.center
-        print(img[0, cy, cx])
-        if img[0, cy, cx] > red_thresh and img[1, cy, cx] > green_thresh and img[2, cy, cx] > blue_thresh:
-            filtered_grasps.append(g)
+        # Check color thresholds
+        if (img[0, cy, cx] > red_thresh and 
+            img[1, cy, cx] > green_thresh and 
+            img[2, cy, cx] > blue_thresh):
+            
+            # Draw rectangle points
+            rect_points = draw_rectangle(g.center, g.angle, g.length, g.width)
+            print("length:",g.length)
+            print("width:",g.width)
+            print(rect_points)
+            
+            # Check depth constraint
+            center_depth = depth_img[cy, cx]
+            print("Center:",center_depth)
+            is_valid_grasp = True
+            
+            for x in range(0,len(rect_points)):
+                # Sample points from center to each rectangle corner
+                p1=rect_points[x]
+                p2=rect_points[(x+2)%4]
+                print(p1)
+                print(p2)
+                line_points = sample_points_along_line(p1, p2, num_depth_checks)
+                for pt in line_points:
+                    y,x = int(pt[0]), int(pt[1])
+                    print(depth_img[y,x])
+                    #if 0 <= x < depth_img.shape[1] and 0 <= y < depth_img.shape[0]:
+                    if depth_img[y, x] <= center_depth:
+                        print(y,x)
+                        is_valid_grasp = False
+                        print(is_valid_grasp)
+                        break
+                
+            
+            if is_valid_grasp:
+                filtered_grasps.append(g)
 
     return filtered_grasps
+
+    
 
 def z_detect_grasps(rgb_img, depth, q_img, ang_img, width_img=None, no_grasps=1):
     """
@@ -128,7 +193,7 @@ def z_detect_grasps(rgb_img, depth, q_img, ang_img, width_img=None, no_grasps=1)
 
         grasps.append(grasp)
 
-    filtered_grasps = filter_grasps(grasps, rgb_img)
+    filtered_grasps = filter_grasps(grasps, rgb_img , depth)
 
     for g in filtered_grasps:
         print("Grasp at: ", g.center, g.angle)
