@@ -43,14 +43,14 @@
             <include>
                 <uri>model://cube_green</uri>
             </include>
-            <pose frame=''>0.247 0.023 0.011 -0.005 0.038 0.671</pose>
+            <pose frame=''>0.247 0.0247 0.011 -0.005 -0.0005 0.6658</pose>
         </model>
 
         <model name='cube_blue1'>
             <include>
                 <uri>model://cube_blue</uri>
             </include>
-            <pose frame=''>0.291 -0.011 0.011 0.0 0.0 0.5326</pose>
+            <pose frame=''>0.26 0.0195 0.030 0.0 0.0 0.506</pose>
         </model>
         <model name='cube_green3'>
             <include>
@@ -62,37 +62,37 @@
             <include>
                 <uri>model://cube_green</uri>
             </include>
-            <pose frame=''>0.269 -0.013 0.030 -0.05 -0.000184 -0.560</pose>
+            <pose frame=''>0.271 -0.013 0.011 1.5758 0.003 -0.80</pose>
         </model>
         <model name='cube_blue2'>
             <include>
                 <uri>model://cube_blue</uri>
             </include>
-            <pose frame=''>0.244 0.008 0.029 0.0 0.000183 0.634</pose>
+            <pose frame=''>0.244 0.008 0.030 0.020 -0.015 0.6022</pose>
         </model>
         <model name='cube_green5'>
             <include>
                 <uri>model://cube_green</uri>
             </include>
-            <pose frame=''>0.2295 -0.0079 0.027 0.027 0.0032 0.3787</pose>
+            <pose frame=''>0.2626 -0.00394 0.030 0.0028 0.0089 0.4633</pose>
         </model>
         <model name='cube_green6'>
             <include>
                 <uri>model://cube_green</uri>
             </include>
-            <pose frame=''>0.2388 -0.0016 0.011 0.0 0.0 0.641550</pose>
+            <pose frame=''>0.2388 -0.0016 0.011 0.0 -0.021 0.5671</pose>
         </model>
         <model name='cube_blue3'>
             <include>
                 <uri>model://cube_blue</uri>
             </include>
-            <pose frame=''>0.2222 -0.02 0.011 0.0 -0.000184 -0.5307</pose>
+            <pose frame=''>0.2514 -0.02 0.011 0.00225 0.001118 -0.4284</pose>
         </model>
         <model name='cube_green7'>
             <include>
                 <uri>model://cube_green</uri>
             </include>
-            <pose frame=''>0.2189 -0.00002 0.011 0.0 0.0 0.485</pose>
+            <pose frame=''>0.2076 -0.4405 0.011 0.0 0.0077 0.4973</pose>
         </model>
 
         <physics name='default_physics' default='0' type='ode'>
