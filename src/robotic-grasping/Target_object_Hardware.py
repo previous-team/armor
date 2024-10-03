@@ -14,6 +14,7 @@ from hardware.device import get_device
 from inference.post_process import post_process_output
 from utils.data.camera_data import CameraData
 from utils.visualisation.plot import save_results, plot_results
+from utils.dataset_processing import image
 from utils.dataset_processing.grasp import Grasp
 
 import cv2
@@ -26,90 +27,109 @@ import pyrealsense2 as rs
 logging.basicConfig(stream=sys.stdout,level=logging.INFO)
 
 
+def is_target_red(color_image):
+    # Convert the color image to HSV color space
+    hsv_image = cv2.cvtColor(color_image, cv2.COLOR_RGB2HSV)
+
+    # Define red color ranges in HSV
+    lower_red_1 = np.array([0, 120, 70])
+    upper_red_1 = np.array([10, 255, 255])
+    lower_red_2 = np.array([170, 120, 70])
+    upper_red_2 = np.array([180, 255, 255])
+
+    # Create masks for red colors
+    mask1 = cv2.inRange(hsv_image, lower_red_1, upper_red_1)
+    mask2 = cv2.inRange(hsv_image, lower_red_2, upper_red_2)
+    red_mask = mask1 | mask2
+
+    contours, _ = cv2.findContours(red_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    
+    # Return the red mask if any red objects are detected
+    return red_mask if len(contours) > 0 else None
+
+
+def calculate_average_depth(img, depth_img):
+    """
+    Calculate the average depth of the object in the mask.
+    """
+    red_mask = is_target_red(img)
+    
+    if red_mask is not None:
+        # Get the pixels where the mask is non-zero
+        masked_depth_values = depth_img[red_mask > 0]
+        avg_depth = np.mean(masked_depth_values)
+        return avg_depth if masked_depth_values.size > 0 else None
+    return None
 
 def draw_rectangle(center, angle, length, width):
+    """
+    Draw the rectangle points given the center, angle, length, and width.
+    """
+    xo, yo = np.cos(angle), np.sin(angle)
 
-    length=40
-    width=20
-    xo = np.cos(angle)
-    yo = np.sin(angle)
+    y1, x1 = center[0] + length / 2 * yo, center[1] - length / 2 * xo
+    y2, x2 = center[0] - length / 2 * yo, center[1] + length / 2 * xo
 
-    y1 = center[0] + length / 2 * yo
-    x1 = center[1] - length / 2 * xo
-    y2 = center[0] - length / 2 * yo
-    x2 = center[1] + length / 2 * xo
+    return np.array([
+        [y1 - width / 2 * xo, x1 - width / 2 * yo],
+        [y2 - width / 2 * xo, x2 - width / 2 * yo],
+        [y1 + width / 2 * xo, x1 + width / 2 * yo],
+        [y2 + width / 2 * xo, x2 + width / 2 * yo]
+    ]).astype(float)
 
-    return (np.array(
-        [
-            [y1 - width / 2 * xo, x1 - width / 2 * yo],
-            [y2 - width / 2 * xo, x2 - width / 2 * yo],
-            [y1 + width / 2 * xo, x1 + width / 2 * yo],
-            [y2 + width / 2 * xo, x2 + width / 2 * yo],
-            
-        ]
-    ).astype(float))
-        
 def sample_points_along_line(p1, p2, num_points=10):
     """
-    Generate `num_points` evenly spaced points between p1 and p2.
+    Generate evenly spaced points between two points.
     """
     return np.linspace(p1, p2, num_points)
 
-def filter_grasps(grasps, img, depth_img, red_thresh=0, green_thresh=-1, blue_thresh=-1, num_depth_checks=10):
+def filter_grasps(grasps, img, depth_frame, depth_img, num_depth_checks=10):
     """
-    Filter out grasps that are not on the object or obstructed by depth.
-    :param grasps: list of Grasps
-    :param img: RGB Image # Shape: (3, H, W)
-    :param depth_img: Depth Image # Shape: (H, W)
-    :param red_thresh: Red threshold
-    :param green_thresh: Green threshold
-    :param blue_thresh: Blue threshold
-    :param num_depth_checks: Number of depth checks from the center to the edge
-    :return: list of Grasps
+    Filter grasps based on whether they are on the red object and not obstructed by depth.
     """
+    red_mask = is_target_red(img)
     filtered_grasps = []
+    
+    avg_object_depth = calculate_average_depth(img, depth_img)
+
+    if avg_object_depth is None:
+        print("Red object not detected.")
+        return filtered_grasps
+
     for g in grasps:
         cy, cx = g.center
-        # Check color thresholds
-        if (img[0, cy, cx] > red_thresh and 
-            img[1, cy, cx] > green_thresh and 
-            img[2, cy, cx] > blue_thresh):
-            
-            # Draw rectangle points
+
+        # Check if grasp center is on the red object
+        if red_mask is not None and red_mask[cx, cy] != 0:
+        
+            print("Red object detected.")
+            # Check depth constraints along the rectangle
             rect_points = draw_rectangle(g.center, g.angle, g.length, g.width)
-            print("length:",g.length)
-            print("width:",g.width)
-            print(rect_points)
-            
-            # Check depth constraint
-            center_depth = depth_img[cy, cx]
-            print("Center:",center_depth)
             is_valid_grasp = True
-            
-            for x in range(0,len(rect_points)):
-                # Sample points from center to each rectangle corner
-                p1=rect_points[x]
-                p2=rect_points[(x+2)%4]
-                print(p1)
-                print(p2)
+
+            for i in range(len(rect_points)):
+                p1, p2 = rect_points[i], rect_points[(i+2) % 4]
                 line_points = sample_points_along_line(p1, p2, num_depth_checks)
+
                 for pt in line_points:
-                    y,x = int(pt[0]), int(pt[1])
-                    print(depth_img[y,x])
-                    #if 0 <= x < depth_img.shape[1] and 0 <= y < depth_img.shape[0]:
-                    if depth_img[y, x] <= center_depth:
-                        print(y,x)
+                    y, x = int(pt[0]), int(pt[1])
+
+                    print(f"Depth at ")
+
+                    if depth_frame.get_distance(x, y) <= avg_object_depth:
                         is_valid_grasp = False
-                        print(is_valid_grasp)
                         break
                 
-            
+                if not is_valid_grasp:
+                    break
+
             if is_valid_grasp:
                 filtered_grasps.append(g)
 
     return filtered_grasps
 
-def hardware_detect_grasps(q_img, ang_img,depth_img,rgb_img, width_img=None, no_grasps=1):
+
+def hardware_detect_grasps(q_img, ang_img, depth_frame, depth_img, rgb_img, width_img=None, no_grasps=1):
     """
     Detect grasps in a network output.
     :param q_img: Q image network output
@@ -138,7 +158,8 @@ def hardware_detect_grasps(q_img, ang_img,depth_img,rgb_img, width_img=None, no_
             g.width = g.length / 2
         grasps.append(g)
         
-        filtered_grasps=filter_grasps(grasps, rgb_img, depth_img)
+    filtered_grasps=filter_grasps(grasps, rgb_img, depth_frame, depth_img)
+    print("filtered grasps:",filtered_grasps)
     return filtered_grasps
 
 def parse_args():
@@ -291,18 +312,20 @@ if __name__ == '__main__':
                     xc = x.to(device)
                     pred = net.predict(xc)
 
-                    print("pred:",pred)
+                    #print("pred:",pred)
 
                     q_img, ang_img, width_img = post_process_output(pred['pos'], pred['cos'], pred['sin'], pred['width'])
-
-                    grasps = hardware_detect_grasps(q_img, ang_img,depth_img,rgb_img, width_img=None, no_grasps=10)
+                    depth_img = image.Image(depth)
+                    depth_img = depth_img.img.transpose((2, 0, 1))
+                    depth_img = np.squeeze(depth_img)
+                    grasps = hardware_detect_grasps(q_img, ang_img, depth_frame, depth_img, rgb, width_img=None, no_grasps=10)
                 
                     plot_results(fig=fig,
                                  rgb_img=cam_data.get_rgb(rgb, False),
                                  depth_img=np.squeeze(cam_data.get_depth(depth)),
                                  grasp_q_img=q_img,
                                  grasp_angle_img=ang_img,
-                                 no_grasps=args.n_grasps,
+                                 no_grasps=10,
                                  grasp_width_img=width_img)
 
                     for grasp in grasps:
