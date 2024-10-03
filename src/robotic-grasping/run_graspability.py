@@ -12,7 +12,7 @@ from skimage.feature import peak_local_max
 from hardware.armor_camera import RealSenseCamera
 from hardware.device import get_device
 from inference.post_process import post_process_output
-from utils.data.camera_data import CameraData
+from utils.data.camera_data_gazebo import CameraData
 from utils.visualisation.plot import save_results, plot_results
 from utils.dataset_processing.grasp import Grasp
 from utils.dataset_processing.grasp import hardware_detect_grasps
@@ -169,25 +169,26 @@ if __name__ == '__main__':
                 print("Transform matrix generated")          
             else:
 
-                x, depth_img, rgb_img = cam_data.get_data(rgb=rgb, depth=depth) #returns 224x224 rgb and depth images
+                x,denormalised_rgb, depth_img,denormalised_depth, rgb_img = cam_data.get_data(rgb=rgb, depth=depth) #returns 224x224 rgb and depth images
                 
                 with torch.no_grad():
                     xc = x.to(device)
                     pred = net.predict(xc)
 
-                    print("pred:",pred)
+                    # print("pred:",pred)
 
                     q_img, ang_img, width_img = post_process_output(pred['pos'], pred['cos'], pred['sin'], pred['width'])
 
                     # grasps = hardware_detect_grasps(q_img, ang_img, width_img, no_grasps=1,img=rgb_img)
-                
+                    #np.squeeze(cam_data.get_depth(depth))
                     grasps,grasp_param= plot_results(fig=fig,
-                                 rgb_img=cam_data.get_rgb(rgb, False),
-                                 depth_img=np.squeeze(cam_data.get_depth(depth)),
+                                 rgb_img=denormalised_rgb,
+                                 depth_img=np.squeeze(depth_img),
                                  grasp_q_img=q_img,
                                  grasp_angle_img=ang_img,
                                  no_grasps=args.n_grasps,
-                                 grasp_width_img=width_img)
+                                 grasp_width_img=width_img,
+                                 denorm_depth =np.squeeze(denormalised_depth))
                 
                                     
                     for grasp in grasps:
@@ -217,7 +218,7 @@ if __name__ == '__main__':
                             grasp_msg.pose.position.x = rx
                             grasp_msg.pose.position.y = ry
                             grasp_msg.pose.position.z = rz
-                            print(f'pose stamped:::{rx,ry,rz}')
+                            # print(f'pose stamped:::{rx,ry,rz}')
                             # Orientation will be published later
                             grasp_msg.pose.orientation.x = quaternion[0]
                             grasp_msg.pose.orientation.y = quaternion[1]

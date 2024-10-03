@@ -3,7 +3,7 @@ import numpy as np
 from skimage.draw import polygon
 from skimage.feature import peak_local_max
 import cv2
-
+from sklearn.cluster import DBSCAN
 
 def _gr_text_to_no(l, offset=(0, 0)):
     """
@@ -354,7 +354,7 @@ class Grasp:
     A Grasp represented by a center pixel, rotation angle and gripper width (length)
     """
 
-    def __init__(self, center, angle, length=60, width=30):
+    def __init__(self, center, angle, length=100, width=50):
         self.center = center
         self.angle = angle  # Positive angle means rotate anti-clockwise from horizontal.
         self.length = length
@@ -443,7 +443,80 @@ def detect_grasps(q_img, ang_img, width_img=None, no_grasps=1):
 
     return grasps
 
+'''Function for checking red object'''
+def is_target_red(grasp_point, color_image, depth_image):
+    # Convert the color image to HSV color space
+    color_image = np.copy(color_image)
+    hsv_image = cv2.cvtColor(color_image, cv2.COLOR_RGB2HSV)
 
+    lower_red_1 = np.array([0, 120, 70])    # Lower range for red
+    upper_red_1 = np.array([10, 255, 255])  # Upper range for red
+    lower_red_2 = np.array([170, 120, 70])  # Second lower range for red
+    upper_red_2 = np.array([180, 255, 255]) # Second upper range for red
+
+    
+    mask1 = cv2.inRange(hsv_image, lower_red_1, upper_red_1)
+    mask2 = cv2.inRange(hsv_image, lower_red_2, upper_red_2)
+    red_mask = mask1 | mask2
+
+    
+
+    red_objects = cv2.bitwise_and(color_image, color_image, mask=red_mask)
+
+    contours, _ = cv2.findContours(red_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+
+    if len(contours) > 0:
+        # Draw bounding boxes around detected red objects
+        for contour in contours:
+            x, y, w, h = cv2.boundingRect(contour)
+            # cv2.rectangle(color_image, (x, y), (x + w, y + h), (0, 255, 0), 2)  # Draw bounding box
+            object_depth = depth_image[y:y+h, x:x+w]
+            depth_threshold_min = object_depth.min() - 50
+            depth_threshold_max = object_depth.max() + 50
+            depth_mask = np.where((depth_image >= depth_threshold_min) &
+                                  (depth_image <= depth_threshold_max), 255, 0).astype(np.uint8)
+            combined_mask = cv2.bitwise_and(red_mask[y:y+h, x:x+w], depth_mask[y:y+h, x:x+w])
+            masked_image = cv2.bitwise_and(color_image[y:y+h, x:x+w], color_image[y:y+h, x:x+w], mask=combined_mask)
+            color_image[y:y+h, x:x+w] = masked_image
+
+        return True  
+
+    return False  
+
+
+'''Function for checking blue object'''
+def is_target_blue(grasp_point, color_image, depth_image):
+    # Convert the color image to HSV color space
+    color_image = np.copy(color_image)
+    hsv_image = cv2.cvtColor(color_image, cv2.COLOR_RGB2HSV)
+
+    lower_blue = np.array([110,50,50])
+    upper_blue = np.array([130,255,255])
+
+    blue_mask = cv2.inRange(hsv_image,lower_blue,upper_blue)
+
+    blue_objects = cv2.bitwise_and(color_image, color_image, mask=blue_mask)
+
+    contours, _ = cv2.findContours(blue_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+
+    if len(contours) > 0:
+        # Draw bounding boxes around detected red objects
+        for contour in contours:
+            x, y, w, h = cv2.boundingRect(contour)
+            # cv2.rectangle(color_image, (x, y), (x + w, y + h), (0, 255, 0), 2)  # Draw bounding box
+            object_depth = depth_image[y:y+h, x:x+w]
+            depth_threshold_min = object_depth.min() - 50
+            depth_threshold_max = object_depth.max() + 50
+            depth_mask = np.where((depth_image >= depth_threshold_min) &
+                                  (depth_image <= depth_threshold_max), 255, 0).astype(np.uint8)
+            combined_mask = cv2.bitwise_and(blue_mask[y:y+h, x:x+w], depth_mask[y:y+h, x:x+w])
+            masked_image = cv2.bitwise_and(color_image[y:y+h, x:x+w], color_image[y:y+h, x:x+w], mask=combined_mask)
+            color_image[y:y+h, x:x+w] = masked_image
+
+        return True  
+
+    return False  
+'''Function for contour'''
 def graspability_check(grasp_image,grasp_point_224):
     grasp_param = None
     gray_image = cv2.cvtColor(grasp_image, cv2.COLOR_BGR2GRAY)
@@ -452,9 +525,77 @@ def graspability_check(grasp_image,grasp_point_224):
     contour_image = np.zeros_like(grasp_image)
     cv2.drawContours(contour_image, contours, -1, (0, 255, 0), 2)
     return grasp_param,contour_image
+
+
+def graspability_with_cluster_density(depth_image,grasp_point_224):
+    """
+        Function for cluster density calculation within the rectangle around the target object
+        :param depth_image: Depth image from the camera
+        :param grasp_point_224: Grasp point (224x224 image coordinates)
+        :param target_radius: Radius to consider points near the grasp point
+        :return: cluster density and updated image with clusters marked
+        """
+    
+    grasp_point_depth_value = depth_image[grasp_point_224[1], grasp_point_224[0]]
+    print(f"Depth value at grasp_point_224 {grasp_point_224}: {grasp_point_depth_value}")
+
+    grasp_point_depth_value_right = depth_image[grasp_point_224[1]+10, grasp_point_224[0]]
+    print(f"Depth value at grasp_point_224 to right :::: {grasp_point_224}: {grasp_point_depth_value_right}")
+
+    grasp_point_depth_value_right = depth_image[grasp_point_224[1]-10, grasp_point_224[0]]
+    print(f"Depth value at grasp_point_224 to left ::: {grasp_point_224}: {grasp_point_depth_value_right}")#depth values are zero
+
+    depth_range=(-5, 5)#is this range correct or needs to be sorted
+    target_radius=50
+    min_depth, max_depth = depth_range
+    thresh_image = (depth_image >= min_depth) & (depth_image <= max_depth)
+
+    # _, thresh_image = cv2.threshold(depth_image, 50, 255, cv2.THRESH_BINARY)
+    points = np.column_stack(np.where(thresh_image > 0))
+    if len(points) == 0:
+        print("No valid depth points within the specified range")
+        return None, depth_image
+    ############maybe this clustering is not working 
+    # Apply DBSCAN clustering
+    dbscan = DBSCAN(eps=10, min_samples=5).fit(points)
+    labels = dbscan.labels_
+
+    # Find clusters (excluding noise points labeled as -1)
+    unique_labels = set(labels)
+    clusters = [points[labels == label] for label in unique_labels if label != -1]
+
+    # Calculate density of objects near the target grasp point
+    cluster_density = 0
+    cluster_image = depth_image.copy()
+    points_in_radius = []
+
+    for cluster in clusters:
+        # Calculate distances from cluster points to the grasp point
+        distances = np.linalg.norm(cluster - np.array([grasp_point_224[1], grasp_point_224[0]]), axis=1)
+        close_points = cluster[distances <= target_radius]
+
+        # Update density based on proximity to the grasp point
+        if len(close_points) > 0:
+            points_in_radius.append(close_points)
+            cluster_density += len(close_points) / len(cluster)
+
+        # Draw the cluster for visualization
+        color = tuple(np.random.randint(0, 255, 3).tolist())
+        print(f"Cluster Density::::{cluster_density}")
+        # for point in cluster:
+        #     cv2.circle(cluster_image, (point[1], point[0]), 1, color, -1)
+
+    # Check if there are multiple clusters close to the target
+    grasp_param = True
+    print(f'Points in radius:::::::::{len(points_in_radius)}')
+    if len(points_in_radius) > 1:
+        grasp_param = False  # Multiple objects close to target, not ideal to grasp
     
 
-def hardware_detect_grasps(q_img, ang_img, width_img=None, no_grasps=1,img=None):
+    return grasp_param, cluster_image
+
+
+def hardware_detect_grasps(q_img, ang_img, width_img=None, no_grasps=1,rgb_img=None,depth_img=None):
     """
     Detect grasps in a network output.
     :param q_img: Q image network output
@@ -466,37 +607,52 @@ def hardware_detect_grasps(q_img, ang_img, width_img=None, no_grasps=1,img=None)
     local_max = peak_local_max(q_img, min_distance=20, threshold_abs=0.2, num_peaks=no_grasps)
     
     grasps = []
-    masked_img = np.zeros_like(img) if img is not None else None  # Initialize masked_img
-    contour_img = np.zeros_like(img) if img is not None else None
+    masked_img = np.zeros_like(rgb_img) if rgb_img is not None else None  # Initialize masked_img
+    contour_img = np.zeros_like(rgb_img) if rgb_img is not None else None
+    masked_img_depth = np.zeros_like(depth_img) if depth_img is not None else None
+    cluster_img = np.zeros_like(depth_img) if depth_img is not None else None
     grasp_param = None
     for grasp_point_array in local_max:
         grasp_point_224 = tuple(grasp_point_array)
-        print(f'grasp point for 224x224: {grasp_point_224}')  
+        # print(f'grasp point for 224x224: {grasp_point_224}')  
        
         grasp_angle = ang_img[grasp_point_224]
-        print(f'Grasp angle:{grasp_angle}')
+        # print(f'Grasp angle:{grasp_angle}')
 
-        # Create a Grasp object
-        g = Grasp(grasp_point_224, grasp_angle)
-        if width_img is not None:
-            g.length = width_img[grasp_point_224]
-            g.width = g.length / 2
+        if is_target_blue(grasp_point_224,rgb_img,depth_img):
+            print('Red object detected')
+            # Create a Grasp object
+            g = Grasp(grasp_point_224, grasp_angle)
+            if width_img is not None:
+                g.length = width_img[grasp_point_224]
+                g.width = g.length / 2
 
-        # Convert the Grasp to a GraspRectangle
-        grasp_rectangle = g.as_gr
+            # Convert the Grasp to a GraspRectangle
+            grasp_rectangle = g.as_gr
 
-        # Create a mask for the grasp rectangle region
-        rr, cc = grasp_rectangle.polygon_coords(masked_img.shape[:2])
-        if img is not None:
-            mask = np.zeros(masked_img.shape[:2], dtype=np.uint8)
-            mask[rr, cc] = 255  #the rectangle area
-            masked_img[rr, cc] = img[rr, cc] #retaining only rectangle area
 
-        grasps.append(g)
+            rr, cc = grasp_rectangle.polygon_coords(masked_img.shape[:2])
+            if rgb_img is not None:
+                mask = np.zeros(masked_img.shape[:2], dtype=np.uint8)
+                mask[rr, cc] = 255  #the rectangle area
+                masked_img[rr, cc] = rgb_img[rr, cc] #retaining only rectangle area
+            rr1,cc1 = grasp_rectangle.polygon_coords(masked_img_depth.shape[:2])
+            if depth_img is not None:
+                mask = np.zeros(masked_img_depth.shape[:2])
+                mask[rr1, cc1] = 255  #the rectangle area
+                masked_img_depth[rr1, cc1] = depth_img[rr1, cc1] #retaining only rectangle area
+            grasps.append(g)
 
-        # added cuz sometimes masked image becomes none i.e. usually happens when no rectangle is detected
-        if masked_img is None:
-            masked_img = np.zeros((224, 224, 3), dtype=np.uint8)  # Fallback to a black image
-        grasp_param,contour_img = graspability_check(masked_img,grasp_point_224)
+            # added cuz sometimes masked image becomes none i.e. usually happens when no rectangle is detected
+            if masked_img is None:
+                masked_img = np.zeros((224, 224, 3), dtype=np.uint8)  # Fallback to a black image
+                
+            if masked_img_depth is None:
+                masked_img_depth = np.zeros((224, 224, 3), dtype=np.uint8)  # Fallback to a black image
+                
+            # grasp_param,contour_img = graspability_check(masked_img,grasp_point_224)
+            grasp_param,cluster_img = graspability_with_cluster_density(masked_img_depth,grasp_point_224)
+            # grasp_param,cluster_img = graspability_with_cluster_density(depth_img,grasp_point_224)
+            print(f'Graspable:{grasp_param}')
 
-    return grasps,masked_img,contour_img,grasp_param
+    return grasps,masked_img,cluster_img,grasp_param

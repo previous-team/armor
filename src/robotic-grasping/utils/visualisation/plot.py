@@ -16,7 +16,8 @@ def plot_results(
         grasp_angle_img,
         depth_img=None,
         no_grasps=1,
-        grasp_width_img=None
+        grasp_width_img=None,
+        denorm_depth = None
 ):
     """
     Plot the output of a network
@@ -30,7 +31,7 @@ def plot_results(
     :return:
     """
 
-    gs,grasp_image,contour_img,grasp_param = hardware_detect_grasps(grasp_q_img, grasp_angle_img, width_img=None, no_grasps=no_grasps,img=rgb_img)
+    gs,grasp_image,contour_img,grasp_param = hardware_detect_grasps(grasp_q_img, grasp_angle_img, width_img=None, no_grasps=no_grasps,rgb_img=rgb_img,depth_img = denorm_depth)
 
 
     plt.ion()
