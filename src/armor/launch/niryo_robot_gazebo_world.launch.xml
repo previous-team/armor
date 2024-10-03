@@ -9,11 +9,12 @@
     <arg name="clutter" default="false"/>
     <arg name="stacked" default="false"/>
     <arg name="occluded" default="false"/>
+    <arg name="diffObjects" default="false"/>
 
     <!-- Logic to handle world selection based on clutter, cluster, and occluded parameters -->
 
     <!-- Case 1: Default world when all arguments are false -->
-    <include file="$(find gazebo_ros)/launch/empty_world.launch" if="$(eval not arg('clutter') and not arg('stacked') and not arg('occluded'))">
+    <include file="$(find gazebo_ros)/launch/empty_world.launch" if="$(eval not arg('clutter') and not arg('stacked') and not arg('occluded') and not arg('diffObjects'))">
         <arg name="world_name" value="$(find armor)/worlds/custom_lit.world"/>
         <arg name="debug" value="$(arg debug)"/>
         <arg name="gui" value="$(arg gui)"/>
@@ -45,6 +46,16 @@
     <!-- Case 4: Occluded workspace -->
     <include file="$(find gazebo_ros)/launch/empty_world.launch" if="$(arg occluded)">
         <arg name="world_name" value="$(find armor)/worlds/niryo_cluttered_workspace_occluded.world"/>
+        <arg name="debug" value="$(arg debug)"/>
+        <arg name="gui" value="$(arg gui)"/>
+        <arg name="use_sim_time" value="$(arg use_sim_time)"/>
+        <arg name="headless" value="$(arg headless)"/>
+        <arg name="output" value="log"/>
+    </include>
+
+    <!-- Case 5: diffObjects workspace -->
+    <include file="$(find gazebo_ros)/launch/empty_world.launch" if="$(arg diffObjects)">
+        <arg name="world_name" value="$(find armor)/worlds/niryo_cluttered_diffObjects.world"/>
         <arg name="debug" value="$(arg debug)"/>
         <arg name="gui" value="$(arg gui)"/>
         <arg name="use_sim_time" value="$(arg use_sim_time)"/>
