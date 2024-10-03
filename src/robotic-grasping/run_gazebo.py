@@ -36,6 +36,9 @@ def deproject_pixel_to_point(depth, pixel, ppx, ppy, fx, fy):
     y = (pixel[1] - ppy) * depth / fy
     return np.array([x, y, depth])
 
+
+
+
 def camera_to_world(camera_coords, camera_pose):
     """
     Convert coordinates from camera frame to world frame.
@@ -87,10 +90,16 @@ def camera_to_world(camera_coords, camera_pose):
 
     return world_coords
 
+def project_point_to_pixel(depth, point, ppx, ppy, fx, fy):
+    #x*fx/depth+ppx
+    pixel_x=(point[1]*fx/depth)+ppx
+    pixel_y=(point[0]*fy/depth)+ppy 
+    return pixel_x,pixel_y
+
 def draw_rectangle(center, angle, length, width):
 
-    length=40
-    width=20
+    length=45
+    width=23
     xo = np.cos(angle)
     yo = np.sin(angle)
 
@@ -115,7 +124,7 @@ def sample_points_along_line(p1, p2, num_points=10):
     """
     return np.linspace(p1, p2, num_points)
 
-def filter_grasps(grasps, img, depth_img, red_thresh=0, green_thresh=-1, blue_thresh=-1, num_depth_checks=10):
+def filter_grasps(grasps, img, depth_img, fx, fy, ppx, ppy, red_thresh=0, green_thresh=-1, blue_thresh=-1, num_depth_checks=10):
     """
     Filter out grasps that are not on the object or obstructed by depth.
     :param grasps: list of Grasps
@@ -135,32 +144,44 @@ def filter_grasps(grasps, img, depth_img, red_thresh=0, green_thresh=-1, blue_th
             img[1, cy, cx] > green_thresh and 
             img[2, cy, cx] > blue_thresh):
             
+            
+            center=[cx,cy]
+            depth=depth_img[cy, cx]
+            center_position = deproject_pixel_to_point(depth, center, ppx, ppy, fx, fy)
             # Draw rectangle points
-            rect_points = draw_rectangle(g.center, g.angle, g.length, g.width)
-            print("length:",g.length)
-            print("width:",g.width)
-            print(rect_points)
+            rect_points = draw_rectangle(center_position, g.angle, g.length, g.width)
+            #print("Rectanngle points", rect_points)
+            
+            pixel_points=[]
+            for pt in rect_points:
+                p_p=project_point_to_pixel(depth, pt, ppx, ppy, fx, fy)
+                pixel_points.append(p_p)
+            print("Pixel_points:",pixel_points)
+                
+            
+            #print("length:",g.length)
+            #print("width:",g.width)
+            #print(rect_points)
             
             # Check depth constraint
             center_depth = depth_img[cy, cx]
-            print("Center:",center_depth)
+            #print("Center:",center_depth)
             is_valid_grasp = True
             
             for x in range(0,len(rect_points)):
                 # Sample points from center to each rectangle corner
-                p1=rect_points[x]
-                p2=rect_points[(x+2)%4]
-                print(p1)
-                print(p2)
+                p1=pixel_points[x]
+                p2=pixel_points[(x+2)%4]
+                print("p1:",p1)
+                print("p2:",p2)
                 line_points = sample_points_along_line(p1, p2, num_depth_checks)
                 for pt in line_points:
                     y,x = int(pt[0]), int(pt[1])
-                    print(depth_img[y,x])
+                    #print(depth_img[y,x])
                     #if 0 <= x < depth_img.shape[1] and 0 <= y < depth_img.shape[0]:
                     if depth_img[y, x] <= center_depth:
-                        print(y,x)
+                        #print("not graspable at pts:",(x,y))
                         is_valid_grasp = False
-                        print(is_valid_grasp)
                         break
                 
             
@@ -192,8 +213,14 @@ def z_detect_grasps(rgb_img, depth, q_img, ang_img, width_img=None, no_grasps=1)
             grasp.width = grasp.length / 2
 
         grasps.append(grasp)
+        
+    fx = 462.1379699707031
+    fy = 462.1379699707031
+    ppx = 111
+    ppy = 111
+    
 
-    filtered_grasps = filter_grasps(grasps, rgb_img , depth)
+    filtered_grasps = filter_grasps(grasps, rgb_img , depth, fx, fy, ppx, ppy)
 
     for g in filtered_grasps:
         print("Grasp at: ", g.center, g.angle)
@@ -208,10 +235,7 @@ def z_detect_grasps(rgb_img, depth, q_img, ang_img, width_img=None, no_grasps=1)
 
         z = depth[cy, cx]
 
-        fx = 462.1379699707031
-        fy = 462.1379699707031
-        ppx = 111
-        ppy = 111
+
 
         object_position = deproject_pixel_to_point(z, (cx, cy), ppx, ppy, fx, fy)
 
