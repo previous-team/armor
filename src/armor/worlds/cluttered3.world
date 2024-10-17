@@ -18,7 +18,7 @@
 <!-- export GAZEBO_MODEL_PATH=${GAZEBO_MODEL_PATH}:~/your_ros_workspace/src/your_package/models
         add the above lines in bashrc for custom models -->
 
-        <!--CUBES-->
+        <!-- Set 3 -->
         <model name='cube_red1'>
             <include>
                 <uri>model://cube_red</uri>
@@ -26,77 +26,83 @@
             <pose frame=''>0.25 0.0357 0.011 0.0 0.0 0.5</pose>
         </model>
 
-        
-
         <model name='cuboid_blue1'>
             <include>
                 <uri>model://cuboid_blue</uri>
             </include>
-            <pose frame=''>0.251 0.033 0.0253 0.000183 0.0 0.750</pose>
+            <pose frame=''>0.21 0.045 0.018 0.0003 0.0 0.59</pose>
         </model>
 
         <model name='cuboid_green1'>
             <include>
                 <uri>model://cuboid_green</uri>
             </include>
-            <pose frame=''>0.281 0.0135 0.011 0 0 0.7283</pose>
+            <pose frame=''>0.27 0.035 0.02 0.02 0.0 0.73</pose>
         </model>
 
         <model name='cube_green1'>
             <include>
                 <uri>model://cube_green</uri>
             </include>
-            <pose frame=''>0.247 0.023 0.011 -0.005 0.038 0.671</pose>
+            <pose frame=''>0.23 -0.02 0.012 -0.005 0.035 0.61</pose>
         </model>
 
         <model name='cylinder_blue1'>
             <include>
                 <uri>model://cylinder_blue</uri>
             </include>
-            <pose frame=''>0.291 -0.011 0.011 0.0 0.0 0.5326</pose>
+            <pose frame=''>0.29 -0.045 0.016 0.0 0.0 0.56</pose>
         </model>
+
         <model name='cube_green2'>
             <include>
                 <uri>model://cube_green</uri>
             </include>
-            <pose frame=''>0.266 0.031 0.011 -0.00036 0.0 0.632</pose>
-        </model> 
+            <pose frame=''>0.27 0.05 0.015 -0.0001 0.0 0.65</pose>
+        </model>
+
         <model name='cuboid_green2'>
             <include>
                 <uri>model://cuboid_green</uri>
             </include>
-            <pose frame=''>0.269 -0.013 0.030 -0.05 -0.000184 -0.560</pose>
+            <pose frame=''>0.255 -0.035 0.032 -0.04 -0.0001 -0.53</pose>
         </model>
+
         <model name='cube_blue1'>
             <include>
                 <uri>model://cuboid_blue</uri>
             </include>
-            <pose frame=''>0.244 0.038 0.029 0.0 0.000183 0.634</pose>
+            <pose frame=''>0.26 0.02 0.029 0.0 0.0001 0.6</pose>
         </model>
+
         <model name='cylinder_green1'>
             <include>
                 <uri>model://cylinder_green</uri>
             </include>
-            <pose frame=''>0.2215 0.020863 0.027 0.027 0.0032 0.3787</pose>
+            <pose frame=''>0.23 0.025 0.029 0.035 0.003 0.4</pose>
         </model>
+
         <model name='cube_green3'>
             <include>
                 <uri>model://cube_green</uri>
             </include>
-            <pose frame=''>0.2388 -0.0016 0.011 0.0 0.0 0.641550</pose>
+            <pose frame=''>0.24 -0.015 0.012 0.0 0.0 0.65</pose>
         </model>
+
         <model name='cuboid_blue2'>
             <include>
                 <uri>model://cuboid_blue</uri>
             </include>
-            <pose frame=''>0.2222 -0.02 0.011 0.0 -0.000184 -0.5307</pose>
+            <pose frame=''>0.22 -0.025 0.016 0.0 -0.0002 -0.54</pose>
         </model>
+
         <model name='cube_green4'>
             <include>
                 <uri>model://cube_green</uri>
             </include>
-            <pose frame=''>0.2189 -0.00002 0.011 0.0 0.0 0.485</pose>
+            <pose frame=''>0.22 0.01 0.014 0.0 0.0 0.51</pose>
         </model>
+
 
         <physics name='default_physics' default='0' type='ode'>
             <max_step_size>0.001</max_step_size>
