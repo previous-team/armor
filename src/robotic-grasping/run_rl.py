@@ -2,6 +2,7 @@ import rospy
 import numpy as np
 import torch
 from sensor_msgs.msg import Image
+from sensor_msgs.msg import JointState
 from std_srvs.srv import Empty
 import cv2
 from cv_bridge import CvBridge
@@ -27,7 +28,7 @@ class NiryoRobotRL:
         self.depth_image = None
 
         # Initialize SAC agent (custom SAC implementation)
-        state_dim = 128 * 128 * 2  # Example state dimension, flattened color + depth images
+        state_dim = 224 * 224 * 2  # Example state dimension, flattened color + depth images
         action_dim = 6  # Example action dimension (joint positions)
         self.sac_agent = a.SACAgent(state_dim, action_dim)
 
@@ -58,8 +59,8 @@ class NiryoRobotRL:
             rospy.sleep(0.1)
 
         # Resize images for consistency
-        color_resized = cv2.resize(self.color_image, (128, 128))
-        depth_resized = cv2.resize(self.depth_image, (128, 128))
+        color_resized = cv2.resize(self.color_image, (224, 224))
+        depth_resized = cv2.resize(self.depth_image, (224, 224))
 
         # Flatten and concatenate color and depth images
         state = np.concatenate((color_resized.flatten(), depth_resized.flatten()))
