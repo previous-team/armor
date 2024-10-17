@@ -1,128 +1,19 @@
 <?xml version="1.0" ?>
 <launch xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
         xsi:noNamespaceSchemaLocation="https://gist.githubusercontent.com/nalt/dfa2abc9d2e3ae4feb82ca5608090387/raw/roslaunch.xsd">
+
     <!-- Arguments -->
     <arg name="use_sim_time" default="true"/>
     <arg name="gui" default="true"/>
     <arg name="headless" default="false"/>
     <arg name="debug" default="false"/>
-    <arg name="stacked" default="false"/>
-    <arg name="occluded" default="false"/>
-    <arg name="diffObjects" default="false"/>
-    <arg name="diffObjects1" default="false"/>
-    <arg name="cluttered" default="false"/>
-    <arg name="cluttered1" default="false"/>
-    <arg name="cluttered2" default="false"/>
-    <arg name="cluttered3" default="false"/>
-    <arg name="sparseClutter" default="false"/>
-    <arg name="sparseClutter1" default="false"/>
 
+    <!-- Workspace options as flags -->
+    <arg name="world_name" default="custom_lit"/>
 
-    <!-- Logic to handle world selection based on clutter, cluster, and occluded parameters -->
-
-    <!-- Case 1: Default world when all arguments are false -->
-    <include file="$(find gazebo_ros)/launch/empty_world.launch" if="$(eval not arg('cluttered') and not arg('stacked') and not arg('occluded') and not arg('diffObjects') and not ('diffObjects1'))">
-        <arg name="world_name" value="$(find armor)/worlds/custom_lit.world"/>
-        <arg name="debug" value="$(arg debug)"/>
-        <arg name="gui" value="$(arg gui)"/>
-        <arg name="use_sim_time" value="$(arg use_sim_time)"/>
-        <arg name="headless" value="$(arg headless)"/>
-        <arg name="output" value="log"/>
-    </include>
-
-    <!-- Case 2: Cluttered workspace -->
-    <include file="$(find gazebo_ros)/launch/empty_world.launch" if="$(arg cluttered)">
-        <arg name="world_name" value="$(find armor)/worlds/cluttered.world"/>
-        <arg name="debug" value="$(arg debug)"/>
-        <arg name="gui" value="$(arg gui)"/>
-        <arg name="use_sim_time" value="$(arg use_sim_time)"/>
-        <arg name="headless" value="$(arg headless)"/>
-        <arg name="output" value="log"/>
-    </include>
-
-    <!-- Case 3: Stacked workspace -->
-    <include file="$(find gazebo_ros)/launch/empty_world.launch" if="$(arg stacked)">
-        <arg name="world_name" value="$(find armor)/worlds/stacked.world"/>
-        <arg name="debug" value="$(arg debug)"/>
-        <arg name="gui" value="$(arg gui)"/>
-        <arg name="use_sim_time" value="$(arg use_sim_time)"/>
-        <arg name="headless" value="$(arg headless)"/>
-        <arg name="output" value="log"/>
-    </include>
-
-    <!-- Case 4: Occluded workspace -->
-    <include file="$(find gazebo_ros)/launch/empty_world.launch" if="$(arg occluded)">
-        <arg name="world_name" value="$(find armor)/worlds/occluded.world"/>
-        <arg name="debug" value="$(arg debug)"/>
-        <arg name="gui" value="$(arg gui)"/>
-        <arg name="use_sim_time" value="$(arg use_sim_time)"/>
-        <arg name="headless" value="$(arg headless)"/>
-        <arg name="output" value="log"/>
-    </include>
-
-    <!-- Case 5: diffObjects workspace -->
-    <include file="$(find gazebo_ros)/launch/empty_world.launch" if="$(arg diffObjects)">
-        <arg name="world_name" value="$(find armor)/worlds/diffObjects.world"/>
-        <arg name="debug" value="$(arg debug)"/>
-        <arg name="gui" value="$(arg gui)"/>
-        <arg name="use_sim_time" value="$(arg use_sim_time)"/>
-        <arg name="headless" value="$(arg headless)"/>
-        <arg name="output" value="log"/>
-    </include>
-
-    <!-- Case 6: diffObjects1 worksapce-->
-    <include file="$(find gazebo_ros)/launch/empty_world.launch" if="$(arg diffObjects1)">
-        <arg name="world_name" value="$(find armor)/worlds/diffObjects1.world"/>
-        <arg name="debug" value="$(arg debug)"/>
-        <arg name="gui" value="$(arg gui)"/>
-        <arg name="use_sim_time" value="$(arg use_sim_time)"/>
-        <arg name="headless" value="$(arg headless)"/>
-        <arg name="output" value="log"/>
-    </include>  
-
-    <!-- Case 7: cluttered1 workspace-->
-    <include file="$(find gazebo_ros)/launch/empty_world.launch" if="$(arg cluttered1)">
-        <arg name="world_name" value="$(find armor)/worlds/cluttered1.world"/>
-        <arg name="debug" value="$(arg debug)"/>
-        <arg name="gui" value="$(arg gui)"/>
-        <arg name="use_sim_time" value="$(arg use_sim_time)"/>
-        <arg name="headless" value="$(arg headless)"/>
-        <arg name="output" value="log"/>
-    </include>
-
-    <!-- Case 8: cluttered2 workspace-->
-    <include file="$(find gazebo_ros)/launch/empty_world.launch" if="$(arg cluttered2)">
-        <arg name="world_name" value="$(find armor)/worlds/cluttered2.world"/>
-        <arg name="debug" value="$(arg debug)"/>
-        <arg name="gui" value="$(arg gui)"/>
-        <arg name="use_sim_time" value="$(arg use_sim_time)"/>
-        <arg name="headless" value="$(arg headless)"/>
-        <arg name="output" value="log"/>
-    </include>
-
-    <!-- Case 9: cluttered3 workspace-->
-    <include file="$(find gazebo_ros)/launch/empty_world.launch" if="$(arg cluttered3)">
-        <arg name="world_name" value="$(find armor)/worlds/cluttered3.world"/>
-        <arg name="debug" value="$(arg debug)"/>
-        <arg name="gui" value="$(arg gui)"/>
-        <arg name="use_sim_time" value="$(arg use_sim_time)"/>
-        <arg name="headless" value="$(arg headless)"/>
-        <arg name="output" value="log"/>
-    </include>
-
-    <!-- Case 10: sparseClutter workspace-->
-    <include file="$(find gazebo_ros)/launch/empty_world.launch" if="$(arg sparseClutter)">
-        <arg name="world_name" value="$(find armor)/worlds/sparseClutter.world"/>
-        <arg name="debug" value="$(arg debug)"/>
-        <arg name="gui" value="$(arg gui)"/>
-        <arg name="use_sim_time" value="$(arg use_sim_time)"/>
-        <arg name="headless" value="$(arg headless)"/>
-        <arg name="output" value="log"/>
-    </include>
-
-    <!-- Case 11: sparseClutter1 workspace-->
-    <include file="$(find gazebo_ros)/launch/empty_world.launch" if="$(arg sparseClutter1)">
-        <arg name="world_name" value="$(find armor)/worlds/sparseClutter1.world"/>
+    <!-- Include the world file dynamically based on the set world_name -->
+    <include file="$(find gazebo_ros)/launch/empty_world.launch">
+        <arg name="world_name" value="$(find armor)/worlds/$(arg world_name).world"/>
         <arg name="debug" value="$(arg debug)"/>
         <arg name="gui" value="$(arg gui)"/>
         <arg name="use_sim_time" value="$(arg use_sim_time)"/>
@@ -133,4 +24,5 @@
     <!-- Spawn URDF in Gazebo -->
     <node name="spawn_urdf" pkg="gazebo_ros" type="spawn_model" respawn="false"
           args="-urdf -model niryo_robot -param robot_description" output="log"/>
+
 </launch>

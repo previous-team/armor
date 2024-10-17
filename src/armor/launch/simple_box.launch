@@ -18,17 +18,7 @@ This will reduce the amount of time spent waiting during program shutdown
     <arg name="simu_conveyor" default="true"/>
     <arg name="gui" default="true"/>
     <arg name="conf_location" default="version.txt"/>
-    <arg name="stacked" default="false"/>
-    <arg name="occluded" default="false"/>
-    <arg name="diffObjects" default="false"/>
-    <arg name="diffObjects1" default="false"/>
-    <arg name="cluttered" default="false"/>
-    <arg name="cluttered1" default="false"/>
-    <arg name="cluttered2" default="false"/>
-    <arg name="cluttered3" default="false"/>
-    <arg name="sparseClutter" default="false"/>
-    <arg name="sparseClutter1" default="false"/>
-
+    <arg name="world_name" default="custom_lit"/>
 
     <arg name="model" default="$(find realsense2_description)/urdf/test_d435_camera_no_gravity_simple_box.urdf.xacro"/>
 
@@ -47,16 +37,7 @@ This will reduce the amount of time spent waiting during program shutdown
     <!-- Launching Gazebo World -->
     <include file="$(find armor)/launch/niryo_robot_gazebo_world.launch.xml">
         <arg name="gui" value="$(arg gui)"/>
-        <arg name="stacked" value="$(arg stacked)"/> 
-        <arg name="occluded" value="$(arg occluded)"/>
-        <arg name="diffObjects" value="$(arg diffObjects)"/>
-        <arg name="diffObjects1" value="$(arg diffObjects1)"/>
-        <arg name="cluttered" value="$(arg cluttered)"/>
-        <arg name="cluttered1" value="$(arg cluttered1)"/>
-        <arg name="cluttered2" value="$(arg cluttered2)"/>
-        <arg name="cluttered3" value="$(arg cluttered3)"/>
-        <arg name="sparseClutter" value="$(arg sparseClutter)"/>
-        <arg name="sparseClutter1" value="$(arg sparseClutter1)"/>
+        <arg name="world_name" value="$(arg world_name)"/>
 
     </include>
 
