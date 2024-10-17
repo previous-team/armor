@@ -13,5 +13,5 @@ export GAZEBO_MODEL_PATH=${GAZEBO_MODEL_PATH}:~/<your workspace>/src/armor/model
 ```
 ### Give Bash command like this to select world
 ```bash
-roslaunch armor simple_box.launch world_name:=stack
+roslaunch armor simple_box.launch world_name:=stacked
 ```
