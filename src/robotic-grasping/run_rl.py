@@ -20,7 +20,7 @@ def push_along_line_from_action(action, z=0.1, debug=False):
     z: constant z-coordinate for pushing
     debug: boolean to print debug statements
     '''
-    x, y, theta, length = action
+    x, y, z, theta, length = action
 
     # Go to home position
     res = niryo_robot.move_joints(0, 0.5, -1.25, 0, 0, 0)
@@ -151,7 +151,7 @@ class SACAgent:
     def select_action(self, state):
         state = torch.FloatTensor(state).unsqueeze(0)
         action = self.actor(state)
-        # Action will have four components: [x, y, theta, length]
+        # Action will have four components: [x, y, z, theta, length]
         return action.detach().numpy()[0]
     
     def update(self, replay_buffer, batch_size=64, gamma=0.99):
@@ -242,8 +242,8 @@ class NiryoRobotRL:
         self.depth_image = None
 
         # Initialize SAC agent (custom SAC implementation)
-        state_dim = 224 * 224 * 2  # Example state dimension, flattened color + depth images
-        action_dim = 4  # Example action dimension (joint positions)
+        state_dim = 224 * 224 * 3  # Example state dimension, flattened color + depth images
+        action_dim = 5  # Example action dimension (joint positions)
         self.sac_agent = SACAgent(state_dim, action_dim)
 
         # Replay buffer
@@ -272,12 +272,18 @@ class NiryoRobotRL:
         while self.color_image is None or self.depth_image is None:
             rospy.sleep(0.1)
 
+        hsv_image = cv2.cvtColor(self.color_image, cv2.COLOR_BGR2HSV)
+        lower_blue = np.array([100, 150, 50])  # Lower bound for blue
+        upper_blue = np.array([140, 255, 255])  # Upper bound for blue
+
         # Resize images for consistency
         color_resized = cv2.resize(self.color_image, (224, 224))
         depth_resized = cv2.resize(self.depth_image, (224, 224))
+        mask_image = cv2.inRange(hsv_image,lower_blue,upper_blue)
+        mask_resized = cv2.resize(self.mask_image,(224,224))
 
         # Flatten and concatenate color and depth images
-        state = np.concatenate((color_resized.flatten(), depth_resized.flatten()))
+        state = np.concatenate((color_resized.flatten(), depth_resized.flatten(), mask_resized.flatten()))
         return state
     
     def step(self, action):
