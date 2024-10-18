@@ -25,6 +25,11 @@ import pyrealsense2 as rs
 
 logging.basicConfig(stream=sys.stdout,level=logging.INFO)
 
+def deproject_pixel_to_point(depth, pixel, intrinsics):
+    x = (pixel[0] - intrinsics.ppx) * depth / intrinsics.fx
+    y = (pixel[1] - intrinsics.ppy) * depth / intrinsics.fy
+    return np.array([x, y, depth])
+
 
 
 def draw_rectangle(center, angle, length, width):
@@ -55,7 +60,7 @@ def sample_points_along_line(p1, p2, num_points=10):
     """
     return np.linspace(p1, p2, num_points)
 
-def filter_grasps(grasps, img, depth_img, red_thresh=0, green_thresh=-1, blue_thresh=-1, num_depth_checks=10):
+def filter_grasps(grasps, img, depth_img, intrinsics, red_thresh=0, green_thresh=-1, blue_thresh=-1, num_depth_checks=10):
     """
     Filter out grasps that are not on the object or obstructed by depth.
     :param grasps: list of Grasps
@@ -75,14 +80,19 @@ def filter_grasps(grasps, img, depth_img, red_thresh=0, green_thresh=-1, blue_th
             img[1, cy, cx] > green_thresh and 
             img[2, cy, cx] > blue_thresh):
             
+            center=[cx,cy]
+            center_depth = depth_img[cy, cx]
+            
+            center_position = deproject_pixel_to_point(depth,center_depth, intrinsics)
+            
             # Draw rectangle points
-            rect_points = draw_rectangle(g.center, g.angle, g.length, g.width)
+            rect_points = draw_rectangle(center_position, g.angle, g.length, g.width)
             print("length:",g.length)
             print("width:",g.width)
             print(rect_points)
             
             # Check depth constraint
-            center_depth = depth_img[cy, cx]
+            
             print("Center:",center_depth)
             is_valid_grasp = True
             
@@ -109,7 +119,7 @@ def filter_grasps(grasps, img, depth_img, red_thresh=0, green_thresh=-1, blue_th
 
     return filtered_grasps
 
-def hardware_detect_grasps(q_img, ang_img,depth_img,rgb_img, width_img=None, no_grasps=1):
+def hardware_detect_grasps(q_img, ang_img,depth_img,rgb_img, intrinsics, width_img=None,no_grasps=1):
     """
     Detect grasps in a network output.
     :param q_img: Q image network output
@@ -138,7 +148,7 @@ def hardware_detect_grasps(q_img, ang_img,depth_img,rgb_img, width_img=None, no_
             g.width = g.length / 2
         grasps.append(g)
         
-        filtered_grasps=filter_grasps(grasps, rgb_img, depth_img)
+        filtered_grasps=filter_grasps(grasps, rgb_img, depth_img,intrinsics)
     return filtered_grasps
 
 def parse_args():
@@ -295,7 +305,7 @@ if __name__ == '__main__':
 
                     q_img, ang_img, width_img = post_process_output(pred['pos'], pred['cos'], pred['sin'], pred['width'])
 
-                    grasps = hardware_detect_grasps(q_img, ang_img,depth_img,rgb_img, width_img=None, no_grasps=10)
+                    grasps = hardware_detect_grasps(q_img, ang_img,depth_img,rgb_img,cam.intrinsics, width_img=None, no_grasps=10)
                 
                     plot_results(fig=fig,
                                  rgb_img=cam_data.get_rgb(rgb, False),
@@ -311,7 +321,7 @@ if __name__ == '__main__':
                         object_in_camera_frame = pose_value_with_depth_compensation(grasp_point_640, depth_frame, depth_unexpanded, cam.intrinsics)
                         if object_in_camera_frame is not None and transform_matrix is not None:
                             object_in_aruco_frame = transform_object_to_bot(object_in_camera_frame, transform_matrix)
-                            T_x,T_y,T_z = -0.278,-0.014,0 #wrt aruco frame
+                            T_x,T_y,T_z = -0.295,0,0 #wrt aruco frame
                             transform_bot = np.eye(4)
                             tranform_bot = aruco_transformation_matrix(T_x,T_y,T_z)
                             object_in_bot_frame = transform_object_to_bot(object_in_aruco_frame,tranform_bot)
