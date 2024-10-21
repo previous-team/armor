@@ -21,7 +21,6 @@ def push_along_line_from_action(action, z=0.1, debug=False):
     debug: boolean to print debug statements
     '''
     x, y, z, theta, length = action
-
     # Go to home position
     res = niryo_robot.move_joints(0, 0.5, -1.25, 0, 0, 0)
     if debug and res and res[0] == 1:
@@ -50,64 +49,13 @@ def push_along_line_from_action(action, z=0.1, debug=False):
     if debug:
         print("Returned to home position")
 
-
-
-# Function to push along line
-def push_along_line(x, y, z, theta, length, debug=False):
-    '''
-    Pushes the robot along a line
-    x: x coordinate of the starting position
-    y: y coordinate of the starting position
-    z: z coordinate of the starting position
-    theta: angle of the line
-    length: length of the line
-    debug: boolean to print debug statements
-    '''
-    # Go to home position
-    res = niryo_robot.move_joints(0, 0.5, -1.25, 0, 0, 0)
-    if debug and res and res[0] == 1:
-        print("Moved to home position")
-    elif debug:
-        print("Failed to move to home position")
-
-    # Close the gripper
-    res = niryo_robot.grasp_with_tool()
-    while not res:
-        res = niryo_robot.grasp_with_tool()
-    if debug and res and res[0] == 1:
-        print("Closed the gripper")
-    elif debug:
-        print("Failed to close the gripper")
-
-    # Move to the starting position
-    res = niryo_robot.move_pose(x, y, max(z + 0.07, 0.1), 0.0, 1.57, 0)
-    if debug and res and res[0] == 1:
-        print("Moved to the starting position: ", x, y, z)
-    elif debug:
-        print("Failed to move to the starting position")
-
-    final_x, final_y = x + length * math.cos(theta), y + length * math.sin(theta)
-    res = niryo_robot.move_pose(final_x, final_y, max(z + 0.07, 0.1), 0.0, 1.57, 0)
-    if debug and res and res[0] == 1:
-        print("Moved to the final position: ", final_x, final_y, z)
-    elif debug:
-        print("Failed to move to the final position")
-
-    # Go to home position
-    res = niryo_robot.move_joints(0, 0.5, -1.25, 0, 0, 0)
-    if debug and res and res[0] == 1:
-        print("Moved to home position")
-    elif debug:
-        print("Failed to move to home position")
-
-
 # Define the neural network for the policy (actor) and Q-function (critic)
 class Actor(nn.Module):
     def __init__(self, state_dim, action_dim):
         super(Actor, self).__init__()
         self.fc1 = nn.Linear(state_dim, 256) #fully connected layer with 256 hidden units
         self.fc2 = nn.Linear(256, 256)
-        self.fc3 = nn.Linear(256, action_dim)
+        self.fc3 = nn.Linear(256, action_dim)   # TODO DIMENSION CHANGES
         self.relu = nn.ReLU() #non-linear activation function
     #Defines how data passes through the network
     def forward(self, state):
@@ -205,7 +153,7 @@ class SACAgent:
 
 # Replay buffer for experience storage
 class ReplayBuffer:
-    def __init__(self, max_size=1000000):
+    def __init__(self, max_size=10000):    # TODO CHANGE SIZE
         self.buffer = deque(maxlen=max_size)
     #adds new experience to the buffer
     def push(self, state, action, reward, next_state, done):
@@ -242,7 +190,7 @@ class NiryoRobotRL:
         self.depth_image = None
 
         # Initialize SAC agent (custom SAC implementation)
-        state_dim = 224 * 224 * 3  # Example state dimension, flattened color + depth images
+        state_dim = 224 * 224 * 3  # Example state dimension, flattened color + depth images # TODO TRY GRAYSCALE FOR RGB IMAGE
         action_dim = 5  # Example action dimension (joint positions)
         self.sac_agent = SACAgent(state_dim, action_dim)
 
@@ -261,7 +209,7 @@ class NiryoRobotRL:
         # Reset simulation
         rospy.wait_for_service('/gazebo/reset_simulation')
         reset_simulation = rospy.ServiceProxy('/gazebo/reset_simulation', Empty)
-        reset_simulation()
+        reset_simulation() # TODO arjun's work
 
         # Return initial state
         state = self.get_state()
@@ -286,13 +234,18 @@ class NiryoRobotRL:
         state = np.concatenate((color_resized.flatten(), depth_resized.flatten(), mask_resized.flatten()))
         return state
     
+    def done_fun(self):
+        return True
+    
     def step(self, action):
         # Execute push action using the selected action
+        
         push_along_line_from_action(action, debug=True)
         rospy.sleep(0.1)
 
         # After pushing, get new state and compute reward
         state = self.get_state()
+        
         reward, done = self.compute_reward(state)
 
         return state, reward, done
@@ -302,6 +255,11 @@ class NiryoRobotRL:
         # Custom reward function based on the robot's task
         reward = 0
         done = False
+        # ml model, check graspable , reward , 
+        # mask increasing reward
+        # clutter 
+        # object not grasped if graspable
+        # TODO IF CONDITION FOR GRASPABLE OR NOT
         # Example: reward based on whether the target is grasped
         #  TODO REWARDS FOR DIFFERENT ACTIONS
         if self.target_grasped(state):
