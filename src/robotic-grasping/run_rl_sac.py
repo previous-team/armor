@@ -1,4 +1,5 @@
 import rospy
+from std_msgs.msg import Bool
 import numpy as np
 import torch
 import math
@@ -18,6 +19,9 @@ from std_srvs.srv import Empty
 from torch.utils.tensorboard import SummaryWriter
 
 
+def denormalize_action(action, action_min, action_max):
+    return action_min + (action_max - action_min) * action
+
 def push_along_line_from_action(action, z=0.1, debug=False):
     '''
     Pushes the robot along a line, where the action vector defines the push.
@@ -25,7 +29,22 @@ def push_along_line_from_action(action, z=0.1, debug=False):
     z: constant z-coordinate for pushing
     debug: boolean to print debug statements
     '''
-    x, y, z, theta, length = action
+
+    real_x_min, real_x_max = 0.18, 0.4
+    real_y_min, real_y_max = -0.18, 0.18  
+    real_z_min, real_z_max = 0.0, 0.2  
+    real_theta_min, real_theta_max = 0 , 360
+    real_length_min, real_length_max = 0.0, 0.5  
+    # Normalized action values
+    norm_x, norm_y, norm_z, norm_theta, norm_length = action
+
+    # Denormalize each action dimension
+    x = denormalize_action(norm_x, real_x_min, real_x_max)
+    y = denormalize_action(norm_y, real_y_min, real_y_max)
+    z = denormalize_action(norm_z, real_z_min, real_z_max)
+    theta = denormalize_action(norm_theta, real_theta_min, real_theta_max)
+    length = denormalize_action(norm_length, real_length_min, real_length_max)
+
     # Go to home position
     res = niryo_robot.move_joints(0, 0.5, -1.25, 0, 0, 0)
     if debug and res and res[0] == 1:
@@ -54,6 +73,8 @@ def push_along_line_from_action(action, z=0.1, debug=False):
     if debug:
         print("Returned to home position")
 
+    return True
+
 
 # Define the custom Niryo environment
 class NiryoRobotEnv(gym.Env):
@@ -68,15 +89,18 @@ class NiryoRobotEnv(gym.Env):
         self.bridge = CvBridge()
 
         # Subscribe to the camera image topics
-        rospy.Subscriber(self.color_image_topic, Image, self.color_image_callback)
+        rospy.Subscriber(self.color_image_topic, Image, self.color_image_callback) # TODO IMPORT FROM GRASPABLE
         rospy.Subscriber(self.depth_image_topic, Image, self.depth_image_callback)
+         
+        # Graspable subscriber
+        rospy.Subscriber('/graspable',Bool,self.target_grasped)
 
         # Initialize color and depth image variables
         self.color_image = None
         self.depth_image = None
 
         # Define image sizes
-        img_height, img_width = 224, 224
+        img_height, img_width = 224, 224 # TODO WRT TO THE CAMERA DIMS
 
         # RGB image: 3 channels, values range from 0 to 255
         rgb_low = 0
@@ -84,7 +108,7 @@ class NiryoRobotEnv(gym.Env):
 
         # Depth image: 1 channel, values range from 0 to 0.5
         depth_low = 0.0
-        depth_high = 0.1  # in meters
+        depth_high = 0.5  # in meters
 
         # Mask information: white pixel count (integer), centroid X and Y (floating-point values)
         white_pixel_count_low = 0
@@ -119,7 +143,7 @@ class NiryoRobotEnv(gym.Env):
         low_limits = np.array([xmin_limit, ymin_limit, zmin_limit, thetamin_limit, lenmin_limit])  # Example theta and length range [-1, 1]
         high_limits = np.array([xmax_limit, ymax_limit, zmax_limit, thetamax_limit, lenmax_limit])
 
-        self.action_space = spaces.Box(low=low_limits, high=high_limits, dtype=np.float32)
+        self.action_space = spaces.Box(low=low_limits, high=high_limits,shape = (5,), dtype=np.float32)
 
         self.previous_white_pixel_count = 0
         # Episode tracking variables
@@ -127,7 +151,10 @@ class NiryoRobotEnv(gym.Env):
         self.episode_count = 0
         self.current_step = 0  # Initialize current step
 
+        self.target_grasped = None
         self.done = False
+        self.reward = 0
+    
             
 
     def color_image_callback(self, msg):
@@ -152,15 +179,24 @@ class NiryoRobotEnv(gym.Env):
         while self.color_image is None or self.depth_image is None:
             rospy.sleep(0.1)
 
-        # Convert to HSV and create mask for blue color
+        # # Convert to HSV and create mask for blue color
         hsv_image = cv2.cvtColor(self.color_image, cv2.COLOR_BGR2HSV)
-        lower_blue = np.array([100, 150, 50])
-        upper_blue = np.array([140, 255, 255])
-        
+        # lower_blue = np.array([100, 150, 50])
+        # upper_blue = np.array([140, 255, 255])
+        lower_red_1 = np.array([0, 120, 70])
+        upper_red_1 = np.array([10, 255, 255])
+        lower_red_2 = np.array([170, 120, 70])
+        upper_red_2 = np.array([180, 255, 255])
+
+        print('check')
+        mask1 = cv2.inRange(hsv_image, lower_red_1, upper_red_1)
+        mask2 = cv2.inRange(hsv_image, lower_red_2, upper_red_2)
+        mask_image = mask1 | mask2
+            
         # Resize all images to 224x224
-        color_resized = cv2.resize(self.color_image, (224, 224))
+        color_resized = cv2.resize(self.color_image, (224, 224)) # TODO REMOVE ONCE TAKEN FROM GRASPABLE
         depth_resized = cv2.resize(self.depth_image, (224, 224))
-        mask_image = cv2.inRange(hsv_image, lower_blue, upper_blue)
+        # mask_image = cv2.inRange(hsv_image, lower_blue, upper_blue)
         
         # Calculate the number of white pixels in the mask
         white_pixel_count = cv2.countNonZero(mask_image)
@@ -185,20 +221,25 @@ class NiryoRobotEnv(gym.Env):
 
 
     def step(self, action):
+        state = None
+        try:
+            # Increment the current step
+            self.current_step += 1
 
-        # Increment the current step
-        self.current_step += 1
+            # Perform push action using selected action
+            proceed = push_along_line_from_action(action)
+            rospy.sleep(0.1)
 
-        # Perform push action using selected action
-        push_along_line_from_action(action)
-        rospy.sleep(0.1)
+            # After pushing, get new state and compute reward
+            state = self.get_state()
+            self.reward,self.done = self.compute_reward(state)
+            # Update current episode reward
+            self.current_episode_reward += self.reward
+        except Exception as e:      # TODO NEGATIVE REWARD FOR COLLISION
+            rospy.logwarn(f"Exception occurred: {e}")
+            self.done=True
 
-        # After pushing, get new state and compute reward
-        state = self.get_state()
-        reward,self.done = self.compute_reward(state)
-        # Update current episode reward
-        self.current_episode_reward += reward
-
+        info = {}
         # Handle episode completion
         if self.done:
             self.episode_count += 1
@@ -208,32 +249,37 @@ class NiryoRobotEnv(gym.Env):
                 'l': self.current_step  # or use the total steps taken in the episode
             }
 
-        return state, reward,self.done, {}
+        return state, self.reward,self.done, info
 
     def compute_reward(self, state):
-        # Custom reward function based on the robot's task
+
         reward = 0
         
         # Retrieve the current white pixel count from the state
         current_white_pixel_count = state['white_pixel_count']
         
         # Check if the target is grasped
-        if self.target_grasped(state):
-            reward = 1
+        if self.target_grasped:
+            reward=1
+            print(self.target_grasped)
             self.done = True
 
         # Reward for increasing white pixel count
         if current_white_pixel_count > self.previous_white_pixel_count:
-            reward = (current_white_pixel_count - self.previous_white_pixel_count)/1000  # You can adjust the reward value as needed
+            reward = (current_white_pixel_count - self.previous_white_pixel_count)/1000  # You can adjust the reward value as needed # TODO CHANGE REWARD
 
         # Update the previous white pixel count for the next call
         self.previous_white_pixel_count = current_white_pixel_count
 
         return reward, self.done
 
-    def target_grasped(self, state):
+    def target_grasped(self,msg):
+        if msg == True:
+            self.target_grasped = True
+        else:                               # TODO REMOVE ONCE ML MODEL INTEGRATED
+            self.target_grasped = False
         # Logic to check if the target object is grasped########################################################################################
-        return False
+    
 
 class TensorBoardCallback(BaseCallback):
     def __init__(self, log_dir: str):
