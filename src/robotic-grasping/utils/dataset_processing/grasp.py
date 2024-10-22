@@ -424,7 +424,7 @@ def detect_grasps(q_img, ang_img, width_img=None, no_grasps=1):
     :param no_grasps: Max number of grasps to return
     :return: list of Grasps
     """
-    local_max = peak_local_max(q_img, min_distance=20, threshold_abs=0.2, num_peaks=no_grasps)
+    local_max = peak_local_max(q_img, min_distance=10, threshold_abs=0.1, num_peaks=no_grasps)
 
     grasps = []
     for grasp_point_array in local_max:
@@ -435,8 +435,8 @@ def detect_grasps(q_img, ang_img, width_img=None, no_grasps=1):
 
         g = Grasp(grasp_point, grasp_angle)
         if width_img is not None:
-            g.length = width_img[grasp_point]
-            g.width = g.length / 2
+            g.length = width_img[grasp_point] #predicted size of the graspable object at that specific point, in pixel 
+            g.width = g.length / 2 
 
         grasps.append(g)
 

@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 
 from niryo_robot_python_ros_wrapper import *
 from scipy.spatial.transform import Rotation as R

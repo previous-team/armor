@@ -1,0 +1,146 @@
+    <sdf version='1.6'>
+    <world name='default'>
+        <scene>
+            <ambient>0.0 0.0 0.0 1.0</ambient>
+            <shadows>0</shadows>
+            <background>0.7 0.7 0.7 1</background>
+        </scene>
+        <!-- A global light source -->
+        <include>
+            <uri>model://sun</uri>
+        </include>
+
+        <!-- A ground plane -->
+        <include>
+            <uri>model://ground_plane</uri>
+        </include>
+
+<!-- export GAZEBO_MODEL_PATH=${GAZEBO_MODEL_PATH}:~/your_ros_workspace/src/your_package/models
+        add the above lines in bashrc for custom models -->
+
+        <!--CUBES-->
+       <!-- Corrected Set 5 -->
+<model name='cube_red1'>
+    <include>
+        <uri>model://cube_red</uri>
+    </include>
+    <pose frame=''>0.25 0.0357 0.011 0.0 0.0 0.5</pose>
+</model>
+
+        <!-- Cluster of objects away from the red cube -->
+        <model name='cuboid_blue1'>
+            <include>
+                <uri>model://cuboid_blue</uri>
+            </include>
+            <pose frame=''>0.20 0.08 0.013 0.0002 0.0 0.62</pose>
+        </model>
+
+        <model name='cuboid_green1'>
+            <include>
+                <uri>model://cuboid_green</uri>
+            </include>
+            <pose frame=''>0.195 0.075 0.021 0.01 0.0 0.75</pose>
+        </model>
+
+        <model name='cube_green1'>
+            <include>
+                <uri>model://cube_green</uri>
+            </include>
+            <pose frame=''>0.205 0.065 0.017 -0.01 0.05 0.68</pose>
+        </model>
+
+        <model name='cylinder_blue1'>
+            <include>
+                <uri>model://cylinder_blue</uri>
+            </include>
+            <pose frame=''>0.22 0.07 0.015 0.0 0.0 0.0</pose>  <!-- Ensured the cylinder is upright -->
+        </model>
+
+        <model name='cube_green2'>
+            <include>
+                <uri>model://cube_green</uri>
+            </include>
+            <pose frame=''>0.225 0.085 0.012 0.0005 0.0 0.61</pose>
+        </model>
+
+        <!-- Objects around the red cube but less cluttered -->
+        <model name='cuboid_green2'>
+            <include>
+                <uri>model://cuboid_green</uri>
+            </include>
+            <pose frame=''>0.28 -0.015 0.029 -0.03 -0.0002 -0.54</pose>
+        </model>
+
+        <model name='cube_blue1'>
+            <include>
+                <uri>model://cuboid_blue</uri>
+            </include>
+            <pose frame=''>0.275 0.025 0.028 0.0 0.0 0.63</pose>
+        </model>
+
+        <model name='cylinder_green1'>
+            <include>
+                <uri>model://cylinder_green</uri>
+            </include>
+            <pose frame=''>0.27 0.04 0.027 0.0 0.0 0.0</pose>  <!-- Ensured the cylinder is upright -->
+        </model>
+
+        <model name='cube_green3'>
+            <include>
+                <uri>model://cube_green</uri>
+            </include>
+            <pose frame=''>0.24 -0.025 0.012 0.0 0.0 0.65</pose>
+        </model>
+
+        <model name='cuboid_blue2'>
+            <include>
+                <uri>model://cuboid_blue</uri>
+            </include>
+            <pose frame=''>0.255 -0.035 0.014 0.0 -0.0002 -0.52</pose>
+        </model>
+
+        <model name='cube_green4'>
+            <include>
+                <uri>model://cube_green</uri>
+            </include>
+            <pose frame=''>0.255 0.02 0.015 0.0 0.0 0.52</pose>
+        </model>
+
+
+
+
+        <physics name='default_physics' default='0' type='ode'>
+            <max_step_size>0.001</max_step_size>
+            <real_time_factor>1</real_time_factor>
+            <real_time_update_rate>1000</real_time_update_rate>
+        </physics>
+        <!--GUI-->
+        <gui fullscreen='0'>
+            <camera name='user_camera'>
+                <pose frame=''>0.198 -0.823 0.916 0 0.763 1.592</pose>
+                <view_controller>orbit</view_controller>
+                <projection_type>perspective</projection_type>
+            </camera>
+        </gui>
+        <!-- SplotLight source -->
+    <light name='user_spot_light_0' type='spot'>
+      <pose>0.24066 -0.017779 1 0 -0 0</pose>
+      <diffuse>0.5 0.5 0.5 1</diffuse>
+      <specular>0.1 0.1 0.1 1</specular>
+      <direction>0 0 -1</direction>
+      <attenuation>
+        <range>20</range>
+        <constant>0.5</constant>
+        <linear>0.01</linear>
+        <quadratic>0.001</quadratic>
+      </attenuation>
+      <cast_shadows>0</cast_shadows>
+      <spot>
+        <inner_angle>0.6</inner_angle>
+        <outer_angle>1</outer_angle>
+        <falloff>1</falloff>
+      </spot>
+    </light>
+
+    </world>
+</sdf>
