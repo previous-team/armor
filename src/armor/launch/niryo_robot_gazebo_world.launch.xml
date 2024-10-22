@@ -1,25 +1,19 @@
 <?xml version="1.0" ?>
 <launch xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
         xsi:noNamespaceSchemaLocation="https://gist.githubusercontent.com/nalt/dfa2abc9d2e3ae4feb82ca5608090387/raw/roslaunch.xsd">
+
     <!-- Arguments -->
     <arg name="use_sim_time" default="true"/>
     <arg name="gui" default="true"/>
     <arg name="headless" default="false"/>
     <arg name="debug" default="false"/>
-    <arg name="clutter" default="false"/>
 
-    <!-- Include the appropriate world file based on the 'clutter' argument -->
-    <include file="$(find gazebo_ros)/launch/empty_world.launch" if="$(arg clutter)">
-        <arg name="world_name" value="$(find armor)/worlds/niryo_cluttered_workspace.world"/>
-        <arg name="debug" value="$(arg debug)"/>
-        <arg name="gui" value="$(arg gui)"/>
-        <arg name="use_sim_time" value="$(arg use_sim_time)"/>
-        <arg name="headless" value="$(arg headless)"/>
-        <arg name="output" value="log"/>
-    </include>
+    <!-- Workspace options as flags -->
+    <arg name="world_name" default="custom_lit"/>
 
-    <include file="$(find gazebo_ros)/launch/empty_world.launch" unless="$(arg clutter)">
-        <arg name="world_name" value="$(find armor)/worlds/custom_lit.world"/>
+    <!-- Include the world file dynamically based on the set world_name -->
+    <include file="$(find gazebo_ros)/launch/empty_world.launch">
+        <arg name="world_name" value="$(find armor)/worlds/$(arg world_name).world"/>
         <arg name="debug" value="$(arg debug)"/>
         <arg name="gui" value="$(arg gui)"/>
         <arg name="use_sim_time" value="$(arg use_sim_time)"/>
@@ -30,4 +24,5 @@
     <!-- Spawn URDF in Gazebo -->
     <node name="spawn_urdf" pkg="gazebo_ros" type="spawn_model" respawn="false"
           args="-urdf -model niryo_robot -param robot_description" output="log"/>
+
 </launch>

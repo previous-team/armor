@@ -13,7 +13,7 @@ from hardware.cam_gazebo import ROSCameraSubscriber
 from hardware.device import get_device
 from inference.post_process import post_process_output
 from utils.data.camera_data_gazebo import CameraData
-from utils.visualisation.plot import plot_results
+from utils.visualisation.target_plot import plot_results
 from utils.dataset_processing.grasp import Grasp
 
 import rospy
@@ -35,6 +35,9 @@ def deproject_pixel_to_point(depth, pixel, ppx, ppy, fx, fy):
     x = (pixel[0] - ppx) * depth / fx
     y = (pixel[1] - ppy) * depth / fy
     return np.array([x, y, depth])
+
+
+
 
 def camera_to_world(camera_coords, camera_pose):
     """
@@ -87,7 +90,109 @@ def camera_to_world(camera_coords, camera_pose):
 
     return world_coords
 
-def z_detect_grasps(depth, q_img, ang_img, width_img=None, no_grasps=1):
+def project_point_to_pixel(depth, point, ppx, ppy, fx, fy):
+    #x*fx/depth+ppx
+    pixel_x=(point[1]*fx/depth)+ppx
+    pixel_y=(point[0]*fy/depth)+ppy 
+    return pixel_x,pixel_y
+
+def draw_rectangle(center, angle, length, width):
+
+    length=45
+    width=23
+    xo = np.cos(angle)
+    yo = np.sin(angle)
+
+    y1 = center[0] + length / 2 * yo
+    x1 = center[1] - length / 2 * xo
+    y2 = center[0] - length / 2 * yo
+    x2 = center[1] + length / 2 * xo
+
+    return (np.array(
+        [
+            [y1 - width / 2 * xo, x1 - width / 2 * yo],
+            [y2 - width / 2 * xo, x2 - width / 2 * yo],
+            [y1 + width / 2 * xo, x1 + width / 2 * yo],
+            [y2 + width / 2 * xo, x2 + width / 2 * yo],
+            
+        ]
+    ).astype(float))
+        
+def sample_points_along_line(p1, p2, num_points=10):
+    """
+    Generate `num_points` evenly spaced points between p1 and p2.
+    """
+    return np.linspace(p1, p2, num_points)
+
+def filter_grasps(grasps, img, depth_img, fx, fy, ppx, ppy, red_thresh=0, green_thresh=-1, blue_thresh=-1, num_depth_checks=10):
+    """
+    Filter out grasps that are not on the object or obstructed by depth.
+    :param grasps: list of Grasps
+    :param img: RGB Image # Shape: (3, H, W)
+    :param depth_img: Depth Image # Shape: (H, W)
+    :param red_thresh: Red threshold
+    :param green_thresh: Green threshold
+    :param blue_thresh: Blue threshold
+    :param num_depth_checks: Number of depth checks from the center to the edge
+    :return: list of Grasps
+    """
+    filtered_grasps = []
+    for g in grasps:
+        cy, cx = g.center
+        # Check color thresholds
+        if (img[0, cy, cx] > red_thresh and 
+            img[1, cy, cx] > green_thresh and 
+            img[2, cy, cx] > blue_thresh):
+            
+            
+            center=[cx,cy]
+            depth=depth_img[cy, cx]
+            center_position = deproject_pixel_to_point(depth, center, ppx, ppy, fx, fy)
+            # Draw rectangle points
+            rect_points = draw_rectangle(center_position, g.angle, g.length, g.width)
+            #print("Rectanngle points", rect_points)
+            
+            pixel_points=[]
+            for pt in rect_points:
+                p_p=project_point_to_pixel(depth, pt, ppx, ppy, fx, fy)
+                pixel_points.append(p_p)
+            print("Pixel_points:",pixel_points)
+                
+            
+            #print("length:",g.length)
+            #print("width:",g.width)
+            #print(rect_points)
+            
+            # Check depth constraint
+            center_depth = depth_img[cy, cx]
+            #print("Center:",center_depth)
+            is_valid_grasp = True
+            
+            for x in range(0,len(rect_points)):
+                # Sample points from center to each rectangle corner
+                p1=pixel_points[x]
+                p2=pixel_points[(x+2)%4]
+                print("p1:",p1)
+                print("p2:",p2)
+                line_points = sample_points_along_line(p1, p2, num_depth_checks)
+                for pt in line_points:
+                    y,x = int(pt[0]), int(pt[1])
+                    #print(depth_img[y,x])
+                    #if 0 <= x < depth_img.shape[1] and 0 <= y < depth_img.shape[0]:
+                    if depth_img[y, x] <= center_depth:
+                        #print("not graspable at pts:",(x,y))
+                        is_valid_grasp = False
+                        break
+                
+            
+            if is_valid_grasp:
+                filtered_grasps.append(g)
+
+    return filtered_grasps
+
+    
+
+def z_detect_grasps(rgb_img, depth, q_img, ang_img, width_img=None, no_grasps=1):
     """
     Detect grasps in a network output.
     :param q_img: Q image network output
@@ -96,33 +201,41 @@ def z_detect_grasps(depth, q_img, ang_img, width_img=None, no_grasps=1):
     :param no_grasps: Max number of grasps to return
     :return: list of Grasps
     """
-    local_max = peak_local_max(q_img, min_distance=20, threshold_abs=0.2, num_peaks=no_grasps)
+    local_max = peak_local_max(q_img, min_distance=10, threshold_abs=0.1, num_peaks=no_grasps)
 
     grasps = []
     for grasp_point_array in local_max:
         grasp_point = tuple(grasp_point_array)
 
-        cy,cx = grasp_point  # Invert to reverse the transpose operation that is given to the network
-
-        grasp_angle = ang_img[grasp_point]
-
-        print("Grasp angle:",math.degrees(grasp_angle))
-        
-        quaternion = quaternion_from_euler(0, 0, grasp_angle) #rotation about the z-axis
-
-        g = Grasp(grasp_point, grasp_angle)
+        grasp = Grasp(grasp_point, ang_img[grasp_point])
         if width_img is not None:
-            g.length = width_img[grasp_point]
-            g.width = g.length / 2
+            grasp.length = width_img[grasp_point]
+            grasp.width = grasp.length / 2
 
-        grasps.append(g)
+        grasps.append(grasp)
+        
+    fx = 462.1379699707031
+    fy = 462.1379699707031
+    ppx = 111
+    ppy = 111
+    
+
+    filtered_grasps = filter_grasps(grasps, rgb_img , depth, fx, fy, ppx, ppy)
+
+    for g in filtered_grasps:
+        print("Grasp at: ", g.center, g.angle)
+
+        cy,cx = g.center  # Invert to reverse the transpose operation that is given to the network
+
+        g.angle = g.angle
+
+        print("Grasp angle: ", math.degrees(g.angle))
+        
+        quaternion = quaternion_from_euler(0, 0, g.angle) #rotation about the z-axis
 
         z = depth[cy, cx]
 
-        fx = 462.1379699707031
-        fy = 462.1379699707031
-        ppx = 111
-        ppy = 111
+
 
         object_position = deproject_pixel_to_point(z, (cx, cy), ppx, ppy, fx, fy)
 
@@ -152,7 +265,7 @@ def z_detect_grasps(depth, q_img, ang_img, width_img=None, no_grasps=1):
 
         grasp_pub.publish(grasp_msg)
 
-    return grasps
+    return filtered_grasps
 
 
 def parse_args():
@@ -223,8 +336,7 @@ if __name__ == '__main__':
                 pred = net.predict(xc)
 
                 q_img, ang_img, width_img = post_process_output(pred['pos'], pred['cos'], pred['sin'], pred['width'])
-                grasps=z_detect_grasps(denormalised_depth, q_img, ang_img, width_img=None, no_grasps=1)
-                print(grasps)
+                grasps=z_detect_grasps(rgb_img, denormalised_depth, q_img, ang_img, width_img=None, no_grasps=10)
 
 
                 plot_results(fig=fig,
@@ -232,8 +344,9 @@ if __name__ == '__main__':
                              depth_img=np.squeeze(denormalised_depth),
                              grasp_q_img=q_img,
                              grasp_angle_img=ang_img,
-                             no_grasps=args.n_grasps,
-                             grasp_width_img=width_img)
+                             no_grasps=10,
+                             grasp_width_img=width_img,
+                             grasps=grasps)
                 
     finally:
         pass
