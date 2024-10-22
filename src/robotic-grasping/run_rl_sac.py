@@ -52,11 +52,11 @@ def push_along_line_from_action(action, z=0.1, debug=False):
     debug: boolean to print debug statements
     '''
 
-    real_x_min, real_x_max = 0.18, 0.4
-    real_y_min, real_y_max = -0.18, 0.18  
+    real_x_min, real_x_max = 0.173, 0.427
+    real_y_min, real_y_max = -0.124, 0.124  
     real_z_min, real_z_max = 0.0, 0.2  
-    real_theta_min, real_theta_max = 0 , 360
-    real_length_min, real_length_max = 0.0, 0.5  
+    real_theta_min, real_theta_max = -180,180
+    real_length_min, real_length_max = 0.0,(0.254*0.6) # *0.6 of workspace   
     # Normalized action values
     norm_x, norm_y, norm_z, norm_theta, norm_length = action
 
@@ -164,29 +164,37 @@ class NiryoRobotEnv(gym.Env):
         self.done = False
         self.reward = 0
         self.graspable = False
-    
-            
 
-    # def color_image_callback(self, msg):
-    #     self.color_image = self.bridge.imgmsg_to_cv2(msg, desired_encoding="bgr8")
-
-    # def depth_image_callback(self, msg):
-    #     self.depth_image = self.bridge.imgmsg_to_cv2(msg, desired_encoding="passthrough")
     def reset(self):
-        self.current_episode_reward = 0
-        self.current_step = 0 
-        # Reset the environment and return the initial state
-        rospy.wait_for_service('/delete_and_spawn_models')
-        reset_simulation = rospy.ServiceProxy('/delete_and_spawn_models', delete_and_spawn_models)
-        resp = reset_simulation()
-        state = self.get_state()
-        while state is None:
-            state = self.get_state()
-            if state is None:
-                rospy.loginfo("Waiting for valid state...")
+        try:
+            state = None
+            self.previous_white_pixel_count = 0
+            # Episode tracking variables
+            self.current_episode_reward = 0
+            self.episode_count = 0
+            self.current_step = 0  # Initialize current step
 
-        # Return to home position
-        res = niryo_robot.move_joints(0, 0.5, -1.25, 0, 0, 0)
+            self.target_grasped = None
+            self.done = False
+            self.reward = 0
+            self.graspable = False
+    
+            self.current_episode_reward = 0
+            self.current_step = 0 
+            # Reset the environment and return the initial state
+            rospy.wait_for_service('/delete_and_spawn_models')
+            reset_simulation = rospy.ServiceProxy('/delete_and_spawn_models', delete_and_spawn_models)
+            resp = reset_simulation()
+            state = self.get_state()
+            while state is None:
+                state = self.get_state()
+                if state is None:
+                    rospy.loginfo("Waiting for valid state...")
+
+            # Return to home position
+            res = niryo_robot.move_joints(0, 0.5, -1.25, 0, 0, 0)
+        except:
+            niryo_robot.clear_collision_detected()
         return state
 
     def get_state(self):
@@ -268,7 +276,10 @@ class NiryoRobotEnv(gym.Env):
             self.current_episode_reward += self.reward
         except Exception as e:      # TODO NEGATIVE REWARD FOR COLLISION
             rospy.logwarn(f"Exception occurred: {e}")
+            niryo_robot.clear_collision_detected()
+            self.current_episode_reward -= 10
             self.done=True
+            print("done due to collision")
 
         info = {}
         # Handle episode completion
@@ -291,13 +302,14 @@ class NiryoRobotEnv(gym.Env):
         
         # Check if the target is grasped
         if self.graspable:
-            reward=1
+            reward=10
             print(self.graspable)
+            print("done because object is graspable")
             self.done = True
 
         # Reward for increasing white pixel count
         if current_white_pixel_count > self.previous_white_pixel_count:
-            reward = (current_white_pixel_count - self.previous_white_pixel_count)/1000  # You can adjust the reward value as needed # TODO CHANGE REWARD
+            reward = (current_white_pixel_count - self.previous_white_pixel_count)/100  # You can adjust the reward value as needed # TODO CHANGE REWARD
 
         # Update the previous white pixel count for the next call
         self.previous_white_pixel_count = current_white_pixel_count
@@ -357,11 +369,11 @@ if __name__ == "__main__":
 
     # Save the trained model
     model.save("niryo_sac_model")
-    done = True
-    # After training, you can evaluate or use the trained model:
-    obs = env.reset()
-    for _ in range(1000):
-        action, _states = model.predict(obs)
-        obs, reward, done, info = env.step(action)
-        if done:
-            obs = env.reset()
+    # done = True
+    # # After training, you can evaluate or use the trained model:
+    # obs = env.reset()
+    # for _ in range(1000):
+    #     action, _states = model.predict(obs)
+    #     obs, reward, done, info = env.step(action)
+    #     if done:
+    #         obs = env.reset()
