@@ -1,4 +1,5 @@
 import rospy
+import argparse
 from std_msgs.msg import Bool
 import numpy as np
 import torch
@@ -13,10 +14,31 @@ from stable_baselines3.common.buffers import ReplayBuffer
 from stable_baselines3.common.vec_env import DummyVecEnv
 from stable_baselines3.common.callbacks import CheckpointCallback, BaseCallback
 
+from hardware.cam_gazebo import ROSCameraSubscriber
+from utils.data.camera_data_gazebo import CameraData
+from run_rl_ml import Graspable
+from armor.srv import delete_and_spawn_models
+
 import gym
 from gym import spaces
 from std_srvs.srv import Empty
 from torch.utils.tensorboard import SummaryWriter
+
+def parse_args():
+    parser = argparse.ArgumentParser(description='Evaluate network')
+    parser.add_argument('--network', type=str, default='/home/archanaa/armor/capstone_armor/src/robotic-grasping/trained-models/cornell-randsplit-rgbd-grconvnet3-drop1-ch16/epoch_17_iou_0.96',
+                        help='Path to saved network to evaluate')
+    parser.add_argument('--use-depth', type=int, default=1,
+                        help='Use Depth image for evaluation (1/0)')
+    parser.add_argument('--use-rgb', type=int, default=1,
+                        help='Use RGB image for evaluation (1/0)')
+    parser.add_argument('--n-grasps', type=int, default=1,
+                        help='Number of grasps to consider per image')
+    parser.add_argument('--cpu', dest='force_cpu', action='store_true', default=False,
+                        help='Force code to run in CPU mode')
+
+    args = parser.parse_args()
+    return args
 
 
 def denormalize_action(action, action_min, action_max):
@@ -80,35 +102,22 @@ def push_along_line_from_action(action, z=0.1, debug=False):
 class NiryoRobotEnv(gym.Env):
     def __init__(self):
         super(NiryoRobotEnv, self).__init__()
-        
-        # Define observation and action spaces
-        self.color_image_topic = '/camera/color/image_raw'
-        self.depth_image_topic = '/camera/depth/image_raw'
-        
-        # CvBridge for converting ROS Image messages to OpenCV images
-        self.bridge = CvBridge()
-
-        # Subscribe to the camera image topics
-        rospy.Subscriber(self.color_image_topic, Image, self.color_image_callback) # TODO IMPORT FROM GRASPABLE
-        rospy.Subscriber(self.depth_image_topic, Image, self.depth_image_callback)
-         
-        # Graspable subscriber
-        rospy.Subscriber('/graspable',Bool,self.target_grasped)
-
-        # Initialize color and depth image variables
-        self.color_image = None
-        self.depth_image = None
-
+        self.args = parse_args()
+        self.cam = ROSCameraSubscriber(
+        depth_topic='/camera/depth/image_raw',  
+        rgb_topic='/camera/color/image_raw'    
+        )
+        self.cam_data = CameraData(include_depth=self.args.use_depth, include_rgb=self.args.use_rgb)
         # Define image sizes
-        img_height, img_width = 224, 224 # TODO WRT TO THE CAMERA DIMS
+        img_height, img_width = 224, 224 
 
-        # RGB image: 3 channels, values range from 0 to 255
-        rgb_low = 0
-        rgb_high = 255
+        # gray image: 1 channel, values range from 0 to 255
+        gray_low = 0
+        gray_high = 1
 
         # Depth image: 1 channel, values range from 0 to 0.5
-        depth_low = 0.0
-        depth_high = 0.5  # in meters
+        depth_low = 0
+        depth_high = 1 # TODO check the normalised depth values
 
         # Mask information: white pixel count (integer), centroid X and Y (floating-point values)
         white_pixel_count_low = 0
@@ -119,7 +128,7 @@ class NiryoRobotEnv(gym.Env):
 
         # Observation space initialization
         self.observation_space = spaces.Dict({
-            'rgb': spaces.Box(low=rgb_low, high=rgb_high, shape=(img_height, img_width, 3), dtype=np.uint8),
+            'gray': spaces.Box(low=gray_low, high=gray_high, shape=(img_height, img_width), dtype=np.uint8), #grayscale image
             'depth': spaces.Box(low=depth_low, high=depth_high, shape=(img_height, img_width, 1), dtype=np.float32),
             'white_pixel_count': spaces.Box(low=white_pixel_count_low, high=white_pixel_count_high, shape=(), dtype=np.int32),
             'centroid': spaces.Box(low=centroid_low, high=centroid_high, shape=(2,), dtype=np.float32)  # 2D centroid (X, Y)
@@ -154,33 +163,49 @@ class NiryoRobotEnv(gym.Env):
         self.target_grasped = None
         self.done = False
         self.reward = 0
+        self.graspable = False
     
             
 
-    def color_image_callback(self, msg):
-        self.color_image = self.bridge.imgmsg_to_cv2(msg, desired_encoding="bgr8")
+    # def color_image_callback(self, msg):
+    #     self.color_image = self.bridge.imgmsg_to_cv2(msg, desired_encoding="bgr8")
 
-    def depth_image_callback(self, msg):
-        self.depth_image = self.bridge.imgmsg_to_cv2(msg, desired_encoding="passthrough")
-
+    # def depth_image_callback(self, msg):
+    #     self.depth_image = self.bridge.imgmsg_to_cv2(msg, desired_encoding="passthrough")
     def reset(self):
         self.current_episode_reward = 0
         self.current_step = 0 
         # Reset the environment and return the initial state
-        rospy.wait_for_service('/gazebo/reset_simulation')
-        reset_simulation = rospy.ServiceProxy('/gazebo/reset_simulation', Empty)
-        reset_simulation()
-        # TODO arjun's code  #################################################################################################################################
+        rospy.wait_for_service('/delete_and_spawn_models')
+        reset_simulation = rospy.ServiceProxy('/delete_and_spawn_models', delete_and_spawn_models)
+        resp = reset_simulation()
         state = self.get_state()
+        while state is None:
+            state = self.get_state()
+            if state is None:
+                rospy.loginfo("Waiting for valid state...")
+
+        # Return to home position
+        res = niryo_robot.move_joints(0, 0.5, -1.25, 0, 0, 0)
         return state
 
     def get_state(self):
         # Ensure both color and depth images are available
-        while self.color_image is None or self.depth_image is None:
-            rospy.sleep(0.1)
+        image_bundle = self.cam.get_image_bundle()
+        if image_bundle is None:
+            rospy.loginfo("Waiting for images...")
+            return 
+        rgb = image_bundle['rgb']
+        depth = image_bundle['aligned_depth']
+        x,depth_image, denormalised_depth, rgb_img = self.cam_data.get_data(rgb=rgb, depth=depth)
+        obj = Graspable(network_path=self.args.network,force_cpu=False)
+        self.graspapble = obj.run_graspable(x,depth_image, denormalised_depth, rgb_img )
+        color_image = self.cam_data.get_rgb(rgb,False) # denormalised rgb image for masking of target object
+
+
 
         # # Convert to HSV and create mask for blue color
-        hsv_image = cv2.cvtColor(self.color_image, cv2.COLOR_BGR2HSV)
+        hsv_image = cv2.cvtColor(color_image, cv2.COLOR_BGR2HSV)
         # lower_blue = np.array([100, 150, 50])
         # upper_blue = np.array([140, 255, 255])
         lower_red_1 = np.array([0, 120, 70])
@@ -192,10 +217,10 @@ class NiryoRobotEnv(gym.Env):
         mask1 = cv2.inRange(hsv_image, lower_red_1, upper_red_1)
         mask2 = cv2.inRange(hsv_image, lower_red_2, upper_red_2)
         mask_image = mask1 | mask2
+
+        gray_image = cv2.cvtColor(color_image,cv2.COLOR_BGR2GRAY)
+        gray_image_normalised = cv2.normalize(gray_image, None, 0, 255, cv2.NORM_MINMAX)
             
-        # Resize all images to 224x224
-        color_resized = cv2.resize(self.color_image, (224, 224)) # TODO REMOVE ONCE TAKEN FROM GRASPABLE
-        depth_resized = cv2.resize(self.depth_image, (224, 224))
         # mask_image = cv2.inRange(hsv_image, lower_blue, upper_blue)
         
         # Calculate the number of white pixels in the mask
@@ -209,10 +234,15 @@ class NiryoRobotEnv(gym.Env):
         else:
             cX, cY = -1, -1  # If no white pixels, set centroid to an invalid value
         
+        print("shape:",depth_image.shape)
+
+        print("rgb shape:", gray_image_normalised.shape)
+            # Add an extra dimension to the depth image to match the expected (224, 224, 1) shape
+        depth_image = depth_image.reshape(224, 224, 1)
         # Return the state as a dictionary matching observation space
         state = {
-            'rgb': color_resized,
-            'depth': np.expand_dims(depth_resized, axis=-1),  # Add channel dimension for depth
+            'gray': gray_image_normalised,
+            'depth': depth_image,  # Add channel dimension for depth
             'white_pixel_count': white_pixel_count, # Send number of white pixels and centroid coordinates
             'centroid':[cX,cY]       
         }
@@ -226,12 +256,13 @@ class NiryoRobotEnv(gym.Env):
             # Increment the current step
             self.current_step += 1
 
+            # After pushing, get new state and compute reward
+            state = self.get_state()
+
             # Perform push action using selected action
             proceed = push_along_line_from_action(action)
             rospy.sleep(0.1)
 
-            # After pushing, get new state and compute reward
-            state = self.get_state()
             self.reward,self.done = self.compute_reward(state)
             # Update current episode reward
             self.current_episode_reward += self.reward
@@ -259,9 +290,9 @@ class NiryoRobotEnv(gym.Env):
         current_white_pixel_count = state['white_pixel_count']
         
         # Check if the target is grasped
-        if self.target_grasped:
+        if self.graspable:
             reward=1
-            print(self.target_grasped)
+            print(self.graspable)
             self.done = True
 
         # Reward for increasing white pixel count
@@ -272,14 +303,6 @@ class NiryoRobotEnv(gym.Env):
         self.previous_white_pixel_count = current_white_pixel_count
 
         return reward, self.done
-
-    def target_grasped(self,msg):
-        if msg == True:
-            self.target_grasped = True
-        else:                               # TODO REMOVE ONCE ML MODEL INTEGRATED
-            self.target_grasped = False
-        # Logic to check if the target object is grasped########################################################################################
-    
 
 class TensorBoardCallback(BaseCallback):
     def __init__(self, log_dir: str):
@@ -308,8 +331,13 @@ if __name__ == "__main__":
     # Update tool
     niryo_robot.update_tool()
 
+    
+
     # Initialize ROS node
     rospy.init_node('niryo_rl_node', anonymous=True)
+
+    # Return to home position
+    res = niryo_robot.move_joints(0, 0.5, -1.25, 0, 0, 0)
 
     # Create an environment instance
     env = DummyVecEnv([lambda: NiryoRobotEnv()])
