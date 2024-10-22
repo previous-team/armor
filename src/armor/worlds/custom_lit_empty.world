@@ -16,7 +16,7 @@
 
 
     <!-- Cubes for Niryo Workspace -->
-    <model name='cube_red'>
+    <!-- <model name='cube_red'>
       <include>
         <uri>model://cube_red</uri>
       </include>
@@ -33,7 +33,7 @@
         <uri>model://cube_green</uri>
       </include>
       <pose frame=''>0.25 0 0.011 0 -0 0.6</pose>
-    </model>
+    </model> -->
 
 
     <physics name='default_physics' default='0' type='ode'>
