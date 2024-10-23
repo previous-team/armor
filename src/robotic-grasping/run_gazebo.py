@@ -179,7 +179,7 @@ def filter_grasps(grasps, img, depth_img, fx, fy, ppx, ppy, red_thresh=0, green_
                     y,x = int(pt[0]), int(pt[1])
                     #print(depth_img[y,x])
                     #if 0 <= x < depth_img.shape[1] and 0 <= y < depth_img.shape[0]:
-                    if depth_img[y, x] <= center_depth:
+                    if (0 <= x < 224) and (0 <= y < 224) and depth_img[y, x] <= center_depth:
                         #print("not graspable at pts:",(x,y))
                         is_valid_grasp = False
                         break
@@ -270,7 +270,7 @@ def z_detect_grasps(rgb_img, depth, q_img, ang_img, width_img=None, no_grasps=1)
 
 def parse_args():
     parser = argparse.ArgumentParser(description='Evaluate network')
-    parser.add_argument('--network', type=str, default='/home/archanaa/armor/capstone_armor/src/robotic-grasping/trained-models/cornell-randsplit-rgbd-grconvnet3-drop1-ch16/epoch_17_iou_0.96',
+    parser.add_argument('--network', type=str, default='src/robotic-grasping/trained-models/cornell-randsplit-rgbd-grconvnet3-drop1-ch16/epoch_17_iou_0.96',
                         help='Path to saved network to evaluate')
     parser.add_argument('--use-depth', type=int, default=1,
                         help='Use Depth image for evaluation (1/0)')

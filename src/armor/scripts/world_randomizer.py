@@ -83,8 +83,8 @@ def handle_delete_and_spawn(req):
 
         # Iterate over the models to spawn and spawn each one at a random position
         for model in models_to_spawn:
-            x = random.uniform(0.27, 0.37)  # Randomize x position between 0.2 and 0.4
-            y = random.uniform(-0.075, 0.075)  # Randomize y position between -0.1 and 0.1
+            x = random.uniform(0.17, 0.42)  # Randomize x position between 0.2 and 0.4
+            y = random.uniform(-0.12, 0.12)  # Randomize y position between -0.1 and 0.1
             z = random.uniform(0.2, 0.4)  # Randomize z position between 0.1 and 0.3
             spawn_model(model["sdf_file"], model["model_name"], x, y, z)
 
