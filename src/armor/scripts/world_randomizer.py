@@ -6,6 +6,7 @@ import random
 from gazebo_msgs.srv import SpawnModel, DeleteModel
 from geometry_msgs.msg import Pose
 from armor.srv import delete_and_spawn_models, delete_and_spawn_modelsResponse
+import tf.transformations as tf_trans
 
 # Initialize the ROS node
 rospy.init_node('delete_and_spawn_objects')
@@ -36,11 +37,18 @@ models = [
     {"sdf_file": f"{package_path}/models/cube_green/model.sdf", "model_name": "cube_green_spawned3"},
     {"sdf_file": f"{package_path}/models/cuboid_blue/model.sdf", "model_name": "cuboid_blue_spawned2"},
     {"sdf_file": f"{package_path}/models/cuboid_green/model.sdf", "model_name": "cuboid_green_spawned2"},
-    {"sdf_file": f"{package_path}/models/cube_blue/model.sdf", "model_name": "cube_blue_spawned"}
+    {"sdf_file": f"{package_path}/models/cube_blue/model.sdf", "model_name": "cube_blue_spawned"},
+    {"sdf_file": f"{package_path}/models/cuboid_green/model.sdf", "model_name": "cuboid_green_spawned3"},
+    {"sdf_file": f"{package_path}/models/cube_green/model.sdf", "model_name": "cube_green_spawned4"},
+    {"sdf_file": f"{package_path}/models/cuboid_blue/model.sdf", "model_name": "cuboid_blue_spawned3"},
+    {"sdf_file": f"{package_path}/models/cube_blue/model.sdf", "model_name": "cube_blue_spawned3"},
+    {"sdf_file": f"{package_path}/models/cube_blue/model.sdf", "model_name": "cube_blue_spawned4"},
+    {"sdf_file": f"{package_path}/models/cuboid_green/model.sdf", "model_name": "cuboid_green_spawned4"},
+    {"sdf_file": f"{package_path}/models/cuboid_blue/model.sdf", "model_name": "cuboid_blue_spawned4"}
 ]
 
 # Function to spawn a model
-def spawn_model(sdf_file, model_name, x, y, z):
+def spawn_model(sdf_file, model_name, x, y, z, roll, pitch, yaw):
     with open(sdf_file, "r") as file:
         model_xml = file.read()
 
@@ -48,6 +56,13 @@ def spawn_model(sdf_file, model_name, x, y, z):
     model_pose.position.x = x
     model_pose.position.y = y
     model_pose.position.z = z
+
+    # Convert roll, pitch, yaw to quaternion
+    quaternion = tf_trans.quaternion_from_euler(roll, pitch, yaw)
+    model_pose.orientation.x = quaternion[0]
+    model_pose.orientation.y = quaternion[1]
+    model_pose.orientation.z = quaternion[2]
+    model_pose.orientation.w = quaternion[3]
 
     resp = spawn_model_prox(model_name, model_xml, "", model_pose, "world")
     print(f"Spawned {model_name}: {resp}")
@@ -63,7 +78,6 @@ def delete_model(model_name):
 # Service callback function
 def handle_delete_and_spawn(req):
     try:
-
         # Delete all models
         for model in models:
             delete_model(model["model_name"])
@@ -72,8 +86,8 @@ def handle_delete_and_spawn(req):
         red_cube = [model for model in models if model["model_name"] == "cube_red_spawned"][0]
         models_to_spawn = [red_cube]
 
-        # Randomize the number of additional models to spawn (between 6 and the max number of models - 1)
-        num_additional_models_to_spawn = random.randint(9, len(models) - 1)
+        # Randomize the number of additional models to spawn (between 10 and the max number of models - 1)
+        num_additional_models_to_spawn = random.randint(10, len(models) - 1)
         
         # Randomly select additional models to spawn
         additional_models_to_spawn = random.sample([model for model in models if model["model_name"] != "cube_red_spawned"], num_additional_models_to_spawn)
@@ -81,12 +95,16 @@ def handle_delete_and_spawn(req):
         # Combine the red cube with the additional models
         models_to_spawn.extend(additional_models_to_spawn)
 
-        # Iterate over the models to spawn and spawn each one at a random position
+        # Iterate over the models to spawn and spawn each one at a random position and orientation
         for model in models_to_spawn:
-            x = random.uniform(0.17, 0.42)  # Randomize x position between 0.2 and 0.4
-            y = random.uniform(-0.12, 0.12)  # Randomize y position between -0.1 and 0.1
-            z = random.uniform(0.2, 0.4)  # Randomize z position between 0.1 and 0.3
-            spawn_model(model["sdf_file"], model["model_name"], x, y, z)
+            x = random.uniform(0.17, 0.42)  # Randomize x position between 0.17 and 0.42
+            y = random.uniform(-0.12, 0.12)  # Randomize y position between -0.12 and 0.12
+            z = random.uniform(0.2, 0.4)  # Randomize z position between 0.2 and 0.4
+            roll = random.uniform(0, 2 * 3.14159)  # Randomize roll between 0 and 2*pi
+            pitch = random.uniform(0, 2 * 3.14159)  # Randomize pitch between 0 and 2*pi
+            yaw = random.uniform(0, 2 * 3.14159)  # Randomize yaw between 0 and 2*pi
+
+            spawn_model(model["sdf_file"], model["model_name"], x, y, z, roll, pitch, yaw)
 
         return delete_and_spawn_modelsResponse(status="Success")
     except Exception as e:
