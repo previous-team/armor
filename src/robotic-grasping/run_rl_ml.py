@@ -156,7 +156,7 @@ def filter_grasps(grasps, img, depth_img, fx, fy, ppx, ppy, red_thresh=0, green_
             for pt in rect_points:
                 p_p=project_point_to_pixel(depth, pt, ppx, ppy, fx, fy)
                 pixel_points.append(p_p)
-            print("Pixel_points:",pixel_points)
+            # print("Pixel_points:",pixel_points)
                 
             
             #print("length:",g.length)
@@ -172,8 +172,6 @@ def filter_grasps(grasps, img, depth_img, fx, fy, ppx, ppy, red_thresh=0, green_
                 # Sample points from center to each rectangle corner
                 p1=pixel_points[x]
                 p2=pixel_points[(x+2)%4]
-                print("p1:",p1)
-                print("p2:",p2)
                 line_points = sample_points_along_line(p1, p2, num_depth_checks)
                 for pt in line_points:
                     y,x = int(pt[0]), int(pt[1])
@@ -311,8 +309,7 @@ class Graspable:
             # Post-process the network output
             q_img, ang_img, width_img = post_process_output(pred['pos'], pred['cos'], pred['sin'], pred['width'])
             grasps = z_detect_grasps(rgb_img, denormalised_depth, q_img, ang_img, width_img=None, no_grasps=10)
-
-            # Visualize the results
+            # # Visualize the results
             # fig = plt.figure(figsize=(10, 10))
             # plot_results(fig=fig,
             #              rgb_img=rgb_img,
@@ -322,7 +319,6 @@ class Graspable:
             #              no_grasps=10,
             #              grasp_width_img=width_img,
             #              grasps=grasps)  
-            
         return bool(len(grasps))
 
 
