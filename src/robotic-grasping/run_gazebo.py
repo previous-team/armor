@@ -3,6 +3,7 @@
 import argparse
 import logging
 import math
+import cv2
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -267,6 +268,78 @@ def z_detect_grasps(rgb_img, depth, q_img, ang_img, width_img=None, no_grasps=1)
 
     return filtered_grasps
 
+def pixel_clutter_density(rgb_image, depth_image, window_size=40):
+    if rgb_image is None or depth_image is None:
+        return None
+    
+    rgb_image = rgb_image.transpose((1, 2, 0))#transpose back to original image because the rgb image is transposes in get_rgb()
+    print("shape rgb:",rgb_image.shape)
+    
+    
+        
+    # Converts the RGB image to grayscale, blurs it, and then detects edges using the Canny edge detection
+    gray_rgb = cv2.cvtColor(rgb_image, cv2.COLOR_BGR2GRAY)
+    
+    gray_rgb = (gray_rgb * 255).astype(np.uint8)#done because canny doesnt work for normalised image
+    
+    blurred_rgb = cv2.GaussianBlur(gray_rgb, (5, 5), 0)
+    edges = cv2.Canny(blurred_rgb, 50, 150)
+
+    # Initialize clutter density map
+    clutter_density_map = np.zeros_like(gray_rgb, dtype=np.float32) #same dimensions as the gray_rgb
+  
+        
+    half_window = window_size // 2 #half_window ensures the sliding window is properly centered on each pixel
+    
+    print("gray_rgb shape:",gray_rgb.shape)
+    #Analyzing the window(local) region for clutter
+    for y in range(half_window, gray_rgb.shape[0] - half_window):
+        for x in range(half_window, gray_rgb.shape[1] - half_window):
+                
+            # Extracting window around the current pixel
+            
+            rgb_window = gray_rgb[y-half_window:y+half_window+1, x-half_window:x+half_window+1]
+            edge_window = edges[y-half_window:y+half_window+1, x-half_window:x+half_window+1]
+            depth_window = depth_image[y-half_window:y+half_window+1, x-half_window:x+half_window+1]
+
+            # Find contours within the window
+            contours, _ = cv2.findContours(edge_window, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+            object_positions = []
+
+            local_clutter_density = 0
+            window_area = window_size * window_size
+
+            for contour in contours:
+                # Calculate the bounding box of each object within the window
+                x_w, y_w, w, h = cv2.boundingRect(contour)
+                centroid = (x_w + w // 2, y_w + h // 2)
+                    
+                # Average depth of the object
+                depth_region = depth_window[y_w:y_w+h, x_w:x_w+w]
+                avg_depth = np.mean(depth_region)
+                    
+                object_positions.append((centroid, avg_depth))
+                object_size = w * h
+                    
+                # Calculate proximity factor and contribution to local clutter density
+                for other_centroid, other_depth in object_positions:
+                    if other_centroid == centroid:
+                        continue
+
+                    # Calculate 2D distance between centroids
+                    distance = np.linalg.norm(np.array(centroid) - np.array(other_centroid))
+                        
+                    # Depth-based proximity factor
+                    if abs(avg_depth - other_depth) < 10:  #Takes care of stacked object
+                        local_clutter_density += (1 / (distance + 1e-5)) * object_size# # Avoid division by zero
+                        #Size of the object (bounding box area) is multiplied by the proximity factor. Larger objects contribute more to clutter density.
+                        #Ensures that closer objects contribute more to clutter density. The smaller the distance, the larger the term, which means objects that are closer in 2D space increase the clutter density more significantly
+
+            # Normalize clutter density by window area
+            #clutter_density_map[y, x] = local_clutter_density / window_area
+            clutter_density_map[y, x] = local_clutter_density 
+    return clutter_density_map
+
 
 def parse_args():
     parser = argparse.ArgumentParser(description='Evaluate network')
@@ -337,16 +410,31 @@ if __name__ == '__main__':
 
                 q_img, ang_img, width_img = post_process_output(pred['pos'], pred['cos'], pred['sin'], pred['width'])
                 grasps=z_detect_grasps(rgb_img, denormalised_depth, q_img, ang_img, width_img=None, no_grasps=10)
+                
+                
+                if denormalised_depth is not None and rgb_img is not None:
+                    clutter_density=pixel_clutter_density(rgb_img, denormalised_depth, window_size=40)
+                    print("Clutter_density:",clutter_density)
+                    print("Max:", max(max(x) for x in clutter_density))
+                
+                    # Normalize the clutter density map for heatmap display
+                    clutter_density_normalized = cv2.normalize(clutter_density, None, 0, 255, cv2.NORM_MINMAX).astype(np.uint8)
+
+                    # Apply a color map to create a heatmap
+                    heatmap = cv2.applyColorMap(clutter_density_normalized, cv2.COLORMAP_JET)
+            
+                    # Display the heatmap
+                    cv2.imshow("Clutter Density Heatmap", heatmap)
 
 
-                plot_results(fig=fig,
-                             rgb_img=cam_data.get_rgb(rgb, False),
-                             depth_img=np.squeeze(denormalised_depth),
-                             grasp_q_img=q_img,
-                             grasp_angle_img=ang_img,
-                             no_grasps=10,
-                             grasp_width_img=width_img,
-                             grasps=grasps)
+                # plot_results(fig=fig,
+                #              rgb_img=cam_data.get_rgb(rgb, False),
+                #              depth_img=np.squeeze(denormalised_depth),
+                #              grasp_q_img=q_img,
+                #              grasp_angle_img=ang_img,
+                #              no_grasps=10,
+                #              grasp_width_img=width_img,
+                #              grasps=grasps)
                 
     finally:
         pass
