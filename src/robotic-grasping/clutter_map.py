@@ -5,6 +5,7 @@ from sensor_msgs.msg import Image
 from cv_bridge import CvBridge, CvBridgeError
 import cv2
 import numpy as np
+import concurrent.futures
 
 class CameraSubscriber:
     def __init__(self):
@@ -29,6 +30,7 @@ class CameraSubscriber:
     def rgb_callback(self, data):
         try:
             self.rgb_image = self.bridge.imgmsg_to_cv2(data, desired_encoding="bgr8")
+            self.rgb_image = self.rgb_image[128:352, 208:432]
         except CvBridgeError as e:
             rospy.logerr(f"Could not convert RGB image: {str(e)}")
             
@@ -44,10 +46,8 @@ class CameraSubscriber:
         # Find contours in the image to detect objects
         contours, _ = cv2.findContours(edges, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
         
-
         # Calculate distances between object centroids and their sizes
         objects = []
-        clutter_density = 0
         total_area = self.rgb_image.shape[0] * self.rgb_image.shape[1]  # Total image area
 
         for contour in contours:
@@ -58,48 +58,32 @@ class CameraSubscriber:
             # Find the corresponding depth of the object by averaging depth pixels within the bounding box
             depth_region = self.depth_image[y:y+h, x:x+w]
             avg_depth = np.mean(depth_region)
-            
-            #print("Avg Depth:",avg_depth)
 
             # Calculate object size (approximated by bounding box area)
             object_size = w * h
             
             # Append object position and depth
-            objects.append((centroid, avg_depth,object_size))
-        # print("objects:",objects)
-        # print("length:",len(objects))
+            objects.append((centroid, avg_depth, object_size))
         
         # Initialize clutter density map
-        clutter_density_map = np.zeros_like(gray, dtype=np.float32) #same dimensions as the gray_rgb
-            
-        
-        for x in range(self.rgb_image.shape[0]):
-            for y in range (self.rgb_image.shape[1]):
-                x=int(x)
-                y=int(y)
-                pt=(x,y)
-                
-                
-                clutter_density=0
-                # For each object, compute clutter contribution based on proximity to others
-                for other_centroid, other_depth, object_size in objects:
-                    if other_centroid == pt:
-                        continue
-                
-                    # Calculate 2D distance between centroids
-                    distance = np.linalg.norm(np.array(pt) - np.array(other_centroid))
+        clutter_density_map = np.zeros_like(gray, dtype=np.float32)
 
-                    # Depth-based proximity factor (closer objects have higher clutter contribution)
-                    #if abs(avg_depth - other_depth) < 50:  # Adjust threshold as needed
-                    clutter_density += (1 / (distance + 1e-5)) * object_size  # Avoid division by zero
-                    #Size of the object (bounding box area) is multiplied by the proximity factor. Larger objects contribute more to clutter density.
-                    #Ensures that closer objects contribute more to clutter density. The smaller the distance, the larger the term, which means objects that are closer in 2D space increase the clutter density more significantly
+        # Define window size
+        window_size = 5  # Adjust this value as needed
 
+        def calculate_clutter_for_window(x, y):
+            clutter_density = 0
+            for other_centroid, other_depth, object_size in objects:
+                distance = np.linalg.norm(np.array((x, y)) - np.array(other_centroid))
+                clutter_density += (1 / (distance + 1e-5)) * object_size
+            return clutter_density
 
+        for x in range(0, self.rgb_image.shape[1], window_size):
+            for y in range(0, self.rgb_image.shape[0], window_size):
+                clutter_density = min(calculate_clutter_for_window(x, y), 500)
+                clutter_density_map[y:y+window_size, x:x+window_size] = clutter_density
 
-                clutter_density_map[x,y] = clutter_density
         return clutter_density_map, edges
-    
     
     def display_images(self):
         if self.depth_image is not None and self.rgb_image is not None:
@@ -124,7 +108,7 @@ class CameraSubscriber:
             cv2.imshow("Clutter Density Heatmap", heatmap)
             
             # Display the Canny edges (optional)
-            # cv2.imshow("Canny Edges", edges)
+            cv2.imshow("Canny Edges", edges)
 
             cv2.waitKey(1)
 
