@@ -53,6 +53,11 @@ class CameraSubscriber:
         for contour in contours:
             # Calculate the bounding box of each object
             x, y, w, h = cv2.boundingRect(contour)
+            
+            # Remove small objects (noise)
+            if w * h < 0.01 * total_area:
+                continue
+
             centroid = (x + w // 2, y + h // 2)
 
             # Find the corresponding depth of the object by averaging depth pixels within the bounding box
