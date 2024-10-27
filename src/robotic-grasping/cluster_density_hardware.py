@@ -30,57 +30,64 @@ class CameraSubscriber:
 
         return depth_image, color_image
 
+
+    
     def calculate_pixel_clutter_density(self, rgb_image, depth_image, window_size=40):
-        # Converts the RGB image to grayscale and applies edge detection
-        gray_rgb = cv2.cvtColor(rgb_image, cv2.COLOR_BGR2GRAY)
-        blurred_rgb = cv2.GaussianBlur(gray_rgb, (5, 5), 0)
-        edges = cv2.Canny(blurred_rgb, 50, 150)
+        if rgb_image is None or depth_image is None:
+            return None
+        
+        # Convert the RGB image to grayscale and apply edge detection
+        gray = cv2.cvtColor(rgb_image, cv2.COLOR_BGR2GRAY)
+        blurred = cv2.GaussianBlur(gray, (5, 5), 0)
+        edges = cv2.Canny(blurred, 50, 150)
 
-        # Find all contours once
+        # Find contours in the image to detect objects
         contours, _ = cv2.findContours(edges, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        
+        # Calculate distances between object centroids and their sizes
+        objects = []
+        total_area = rgb_image.shape[0] * rgb_image.shape[1]  # Total image area
 
+        for contour in contours:
+            # Calculate the bounding box of each object
+            x, y, w, h = cv2.boundingRect(contour)
+            
+            # Remove small objects (noise)
+            if w * h < 0.01 * total_area:
+                continue
+
+            centroid = (x + w // 2, y + h // 2)
+
+            # Find the corresponding depth of the object by averaging depth pixels within the bounding box
+            depth_region = depth_image[y:y+h, x:x+w]
+            avg_depth = np.mean(depth_region)
+
+            # Calculate object size (approximated by bounding box area)
+            object_size = w * h
+            
+            # Append object position and depth
+            objects.append((centroid, avg_depth, object_size))
+        
         # Initialize clutter density map
-        clutter_density_map = np.zeros_like(gray_rgb, dtype=np.float32)
-        half_window = window_size // 2
+        clutter_density_map = np.zeros_like(gray, dtype=np.float32)
 
-        # Analyze the local region for clutter
-        for y in range(half_window, gray_rgb.shape[0] - half_window):
-            for x in range(half_window, gray_rgb.shape[1] - half_window):
-                
-                # Extract window around the current pixel
-                rgb_window = gray_rgb[y-half_window:y+half_window+1, x-half_window:x+half_window+1]
-                depth_window = depth_image[y-half_window:y+half_window+1, x-half_window:x+half_window+1]
+        # Define window size
+        window_size = 5  # Adjust this value as needed
 
-                object_positions = []
-                local_clutter_density = 0
-                window_area = window_size * window_size
+        def calculate_clutter_for_window(x, y):
+            clutter_density = 0
+            for other_centroid, other_depth, object_size in objects:
+                distance = np.linalg.norm(np.array((x, y)) - np.array(other_centroid))
+                clutter_density += (1 / (distance + 1e-5)) * object_size
+            return clutter_density
 
-                # Filter contours that are within the current window
-                for contour in contours:
-                    x_w, y_w, w, h = cv2.boundingRect(contour)
-                    if (x_w >= x-half_window and x_w+w <= x+half_window and
-                        y_w >= y-half_window and y_w+h <= y+half_window):
-                        
-                        centroid = (x_w + w // 2, y_w + h // 2)
-                        object_positions.append(centroid)
-
-                        # Average depth of the object
-                        depth_region = depth_window[y_w:y_w+h, x_w:x_w+w]
-                        avg_depth = np.mean(depth_region)
-                        
-                        object_size = w * h
-
-                        # Calculate proximity factor and contribution to local clutter density
-                        for other_centroid in object_positions:
-                            if other_centroid == centroid:
-                                continue
-                            # Calculate 2D distance between centroids
-                            distance = np.linalg.norm(np.array(centroid) - np.array(other_centroid))
-                            local_clutter_density += (1 / (distance + 1e-5)) * object_size
-
-                clutter_density_map[y, x] = local_clutter_density
+        for x in range(0, rgb_image.shape[1], window_size):
+            for y in range(0, rgb_image.shape[0], window_size):
+                clutter_density = min(calculate_clutter_for_window(x, y), 500)
+                clutter_density_map[y:y+window_size, x:x+window_size] = clutter_density
 
         return clutter_density_map, edges
+    
 
     def display_images(self):
         depth_image, rgb_image = self.get_images()
