@@ -177,7 +177,7 @@ def filter_grasps(grasps, img, depth_img, fx, fy, ppx, ppy, red_thresh=0, green_
                     y,x = int(pt[0]), int(pt[1])
                     #print(depth_img[y,x])
                     #if 0 <= x < depth_img.shape[1] and 0 <= y < depth_img.shape[0]:
-                    if depth_img[y, x] <= center_depth:
+                    if (0 <= x < 224) and (0 <= y < 224) and depth_img[y, x] <= center_depth:
                         #print("not graspable at pts:",(x,y))
                         is_valid_grasp = False
                         break
