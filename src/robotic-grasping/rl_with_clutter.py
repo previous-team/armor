@@ -26,7 +26,7 @@ from torch.utils.tensorboard import SummaryWriter
 
 def parse_args():
     parser = argparse.ArgumentParser(description='Evaluate network')
-    parser.add_argument('--network', type=str, default='src/robotic-grasping/trained-models/cornell-randsplit-rgbd-grconvnet3-drop1-ch16/epoch_17_iou_0.96',
+    parser.add_argument('--network', type=str, default='/home/archanaa/armor/capstone_armor/src/robotic-grasping/trained-models/cornell-randsplit-rgbd-grconvnet3-drop1-ch16/epoch_17_iou_0.96',
                         help='Path to saved network to evaluate')
     parser.add_argument('--use-depth', type=int, default=1,
                         help='Use Depth image for evaluation (1/0)')
@@ -443,10 +443,15 @@ class NiryoRobotEnv(gym.Env):
         
         
         # Check if the target is grasped
-        if self.graspable:
-            reward = 10.0
+        if self.graspable and self.current_step == 1:
             self.done = True
-            rospy.loginfo(f"Ending episode as target object is graspable")
+            rospy.loginfo(f"Ending episode as target object is graspable without taking any action")
+        if self.graspable and self.current_step != 1:
+            print(f'Current_step:{self.current_step}')
+            reward += 10.0
+            self.done = True
+            rospy.loginfo(f"Ending episode as target object is graspable after actions taken by niryo")
+        
         else:
             reward += -1.0
             
