@@ -318,24 +318,9 @@ class NiryoRobotEnv(gym.Env):
         # print(f'num_labels{num_labels}')
         self.centroid = centroids[0] if num_labels > 1 else np.array([-1.0, -1.0], dtype=np.float32)  # Handle invalid case
 
-        # # Calculate the centroid of the masked area (if there are white pixels)
-        # M = cv2.moments(mask_image)
-        # if M["m00"] > 0:  # Ensure there are white pixels
-        #     cX = int(M["m10"] / M["m00"])  # X coordinate of the centroid
-        #     cY = int(M["m01"] / M["m00"])  # Y coordinate of the centroid
-        # else:
-        #     cX, cY = -1, -1  # If no white pixels, set centroid to an invalid value
-        # print(f'Centroid{self.centroid}')
-
-        #print(f'color image shape{color_image.shape}')
-
         gray_image = cv2.cvtColor(color_image,cv2.COLOR_RGB2GRAY)
         gray_image_normalised = cv2.normalize(gray_image, None, 0, 255, cv2.NORM_MINMAX) #normalising the grayscaled normalised rgb image
-            
-        # gray_image_normalised = np.expand_dims(gray_image_normalised, axis=-1)
-        # gray_image_normalised = gray_image_normalised.reshape(224,224,1)
-        
-        # Add an extra dimension to the depth image to match the expected (224, 224, 1) shape
+
 
         depth_image = depth_image.transpose((1,2,0))
         #print(f'gray{gray_image_normalised.shape}')
@@ -357,11 +342,7 @@ class NiryoRobotEnv(gym.Env):
     def step(self, action):
         state = spaces.Dict()
         info = {}
-        # state = self.get_state()
-        # while state is None:
-        #     state = self.get_state()
-        #     if state is None:
-        #         rospy.loginfo("Waiting for valid state...")
+
         print('in step')
         try:
             # Increment the current step
@@ -387,8 +368,7 @@ class NiryoRobotEnv(gym.Env):
             niryo_robot.clear_collision_detected()
             self.current_step += 1
             
-            reward,self.done = self.compute_reward(state)
-            self.current_episode_reward += reward
+
 
             state = self.get_state()
             while state is None:
@@ -397,15 +377,19 @@ class NiryoRobotEnv(gym.Env):
                     rospy.loginfo("Waiting for valid state...")
 
             # Penalize for the collision
-            self.current_episode_reward -= 20
+            #self.current_episode_reward -= 5
             self.collision_count += 1
 
             # Check if the number of collisions exceeds the maximum allowed
             if self.collision_count >= self.max_collisions:
+                self.current_episode_reward -= 5  
                 self.done = True
                 rospy.logwarn(f"Maximum collision limit reached ({self.max_collisions}). Ending episode.")
             else:
                 self.done = False  # continue even after collision
+                
+            reward,self.done = self.compute_reward(state)
+            self.current_episode_reward += reward
 
             print(f"Collision detected. Total collisions: {self.collision_count}")
 
@@ -431,42 +415,49 @@ class NiryoRobotEnv(gym.Env):
         current_white_pixel_count = self.current_pixel_count
         # print("current:",current_white_pixel_count)
         
-        
-        
-        # Check if the target is grasped
-        if self.graspable:
-            reward = 10.0
+        if self.graspable and self.current_step == 1:
             self.done = True
             rospy.loginfo(f"Ending episode as target object is graspable")
-        else:
-            reward += -1.0
+            rospy.loginfo(f"Ending episode as target object is graspable without taking any action")
+            
+        if self.graspable and self.current_step != 1:
+            print(f'Current_step:{self.current_step}')
+            reward += 10.0
+            self.done = True
+            rospy.loginfo(f"Ending episode as target object is graspable after actions taken by niryo")
+        # else:
+        #     reward += -1.0
+        #     print("penalty beacuse object is not graspable")
+            
             
     
         # Reward for increasing white pixel count
-        if current_white_pixel_count != self.previous_white_pixel_count:
-            reward += (current_white_pixel_count - self.previous_white_pixel_count)/100.0  # You can adjust the reward value as needed # TODO CHANGE REWARD
-        else:
+        if current_white_pixel_count > self.previous_white_pixel_count:
+            #reward += (current_white_pixel_count - self.previous_white_pixel_count)/100.0  # You can adjust the reward value as needed # TODO CHANGE REWARD
+            reward+=2.0
+            print("reward dur to increase in pixel count")
+        elif current_white_pixel_count < self.previous_white_pixel_count:
+            reward += -2.0 #just for avoiding taking action that dont really help increase graspability of target object
+            print("penalty due to decrease in pixel count")
+        elif current_white_pixel_count == self.previous_white_pixel_count:
             reward += -1.0 #just for avoiding taking action that dont really help increase graspability of target object
-
+            print("penalty due to no change in pixel count")
+            
         clutter_density=self.clutter_map
         current_total_clutter_density = np.sum(clutter_density)
         centroid=self.centroid
         reduction_radius=40 #gripper length
+        current_local_clutter_density=0
 
         #reward for cluster denisty
         if current_white_pixel_count == 0:#if obj not seen
-            # # Reward the robot for moving towards high clutter density areas
-            # high_clutter_density_reward = 0.001 * current_total_clutter_density
-            # Penalize if clutter is not reduced
-            #clutter_reduction_penalty = 0.001 * (self.previous_total_clutter_density - current_total_clutter_density)
-        
-            #reward += high_clutter_density_reward + clutter_reduction_penalty
-            #reward -= clutter_reduction_penalty    
             
-            if current_local_clutter_density>=self.previous_total_clutter_density:
-                reward-=2
-            elif current_local_clutter_density<self.previous_total_clutter_density:
-                reward=+2   
+            if current_total_clutter_density>=self.previous_total_clutter_density:
+                reward-=3
+                print("penalty due to no change or increase in clutter density")
+            elif current_total_clutter_density<self.previous_total_clutter_density:
+                print("Reward due to decrease in clutter density")
+                reward=+3   
      
         else:#  If the object is seen, push to reduce clutter density around it
             # Ensure centroid is provided
@@ -477,14 +468,14 @@ class NiryoRobotEnv(gym.Env):
                                                     max(0, cx-reduction_radius):min(clutter_density.shape[1], cx+reduction_radius)]
                 # Calculate clutter density in this region
                 current_local_clutter_density = np.sum(reduction_area)
-
-                # # Reward for reducing clutter around the centroid
-                # reward -= 0.01 * (self.previous_local_clutter_density - current_local_clutter_density)
                 
                 if current_local_clutter_density>=self.previous_local_clutter_density:
-                    reward-=2
+                    reward-=3
+                    print("Penalty due to no change or increase in local clutter density")
                 elif current_local_clutter_density<self.previous_local_clutter_density:
-                    reward+=2
+                    reward+=3
+                    print("Reward due to decrease in local clutter density")
+                    
         
                 
 
@@ -532,12 +523,15 @@ if __name__ == "__main__":
 
     # Create an environment instance
     env = DummyVecEnv([lambda: NiryoRobotEnv()])
+    
+    # Define the target entropy based on the action space
+    target_entropy = -env.action_space.shape[0]  # For continuous action spaces more exploration
 
     # Set up SAC model with a specified buffer size
-    model = SAC("MultiInputPolicy", env, learning_rate=0.0009, ent_coef='auto', verbose=1, buffer_size=50000)  # Set buffer size here
+    model = SAC("MultiInputPolicy", env, learning_rate=0.003, target_entropy=target_entropy, ent_coef='auto', verbose=1, buffer_size=50000)  # Set buffer size here
 
     # Set up a checkpoint callback to save the model periodically
-    checkpoint_callback = CheckpointCallback(save_freq=1000, save_path='./logs/',
+    checkpoint_callback = CheckpointCallback(save_freq=100, save_path='./logs/',
                                             name_prefix='niryo_sac_model')
 
     # Set up a TensorBoard callback
