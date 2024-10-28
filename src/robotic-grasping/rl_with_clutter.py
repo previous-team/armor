@@ -26,7 +26,7 @@ from torch.utils.tensorboard import SummaryWriter
 
 def parse_args():
     parser = argparse.ArgumentParser(description='Evaluate network')
-    parser.add_argument('--network', type=str, default='/home/archanaa/armor/capstone_armor/src/robotic-grasping/trained-models/cornell-randsplit-rgbd-grconvnet3-drop1-ch16/epoch_17_iou_0.96',
+    parser.add_argument('--network', type=str, default='src/robotic-grasping/trained-models/cornell-randsplit-rgbd-grconvnet3-drop1-ch16/epoch_17_iou_0.96',
                         help='Path to saved network to evaluate')
     parser.add_argument('--use-depth', type=int, default=1,
                         help='Use Depth image for evaluation (1/0)')
@@ -104,20 +104,6 @@ def push_along_line_from_action(action, z=0.1, debug=False):
     if debug:
         print("Returned to home position")
 
-    return True
-
-def check_state_values(state):
-    for key, value in state.items():
-        if isinstance(value, np.ndarray):
-            # If the array is non-empty and has truthy values
-            if not np.any(value):
-                rospy.loginfo(f"Array in key '{key}' is falsy or empty.")
-                return False
-        else:
-            # If value is not an array, check it directly
-            if not value:
-                rospy.loginfo(f"Value for key '{key}' is falsy.")
-                return False
     return True
 
 def calculate_pixel_clutter_density(rgb_image,depth_image):
@@ -237,6 +223,7 @@ class NiryoRobotEnv(gym.Env):
         high_limits = np.array([xmax_limit, ymax_limit, zmax_limit, thetamax_limit, lenmax_limit])
 
         self.action_space = spaces.Box(low=low_limits, high=high_limits,shape = (5,), dtype=np.float32)
+        self.episode_count=0
 
     def reset(self):
         print('in reset')
@@ -247,7 +234,7 @@ class NiryoRobotEnv(gym.Env):
             self.previous_local_clutter_density=1000 #TODO: change it
             # Episode tracking variables
             self.current_episode_reward = 0
-            self.episode_count = 0
+        
             self.current_step = 0  # Initialize current step
 
             
@@ -398,6 +385,9 @@ class NiryoRobotEnv(gym.Env):
         except Exception as e:      # TODO NEGATIVE REWARD FOR COLLISION
             rospy.logwarn(f"Exception occurred: {e}")
             niryo_robot.clear_collision_detected()
+            self.current_step += 1
+            
+
 
             state = self.get_state()
             while state is None:
@@ -406,7 +396,7 @@ class NiryoRobotEnv(gym.Env):
                     rospy.loginfo("Waiting for valid state...")
 
             # Penalize for the collision
-            self.current_episode_reward -= 20
+            self.current_episode_reward -= 5
             self.collision_count += 1
 
             # Check if the number of collisions exceeds the maximum allowed
@@ -415,6 +405,9 @@ class NiryoRobotEnv(gym.Env):
                 rospy.logwarn(f"Maximum collision limit reached ({self.max_collisions}). Ending episode.")
             else:
                 self.done = False  # continue even after collision
+                
+            reward,self.done = self.compute_reward(state)
+            self.current_episode_reward += reward
 
             print(f"Collision detected. Total collisions: {self.collision_count}")
 
@@ -432,6 +425,7 @@ class NiryoRobotEnv(gym.Env):
         return state, self.current_episode_reward,self.done, info
 
 
+
     def compute_reward(self, state):
         print('in reward')
         reward = 0.0
@@ -440,55 +434,67 @@ class NiryoRobotEnv(gym.Env):
         current_white_pixel_count = self.current_pixel_count
         # print("current:",current_white_pixel_count)
         
-        
-        
-        # Check if the target is grasped
         if self.graspable and self.current_step == 1:
             self.done = True
+            rospy.loginfo(f"Ending episode as target object is graspable")
             rospy.loginfo(f"Ending episode as target object is graspable without taking any action")
+            
         if self.graspable and self.current_step != 1:
             print(f'Current_step:{self.current_step}')
             reward += 10.0
             self.done = True
             rospy.loginfo(f"Ending episode as target object is graspable after actions taken by niryo")
-        
-        else:
-            reward += -1.0
+        # else:
+        #     reward += -1.0
+        #     print("penalty beacuse object is not graspable")
+            
             
     
         # Reward for increasing white pixel count
-        if current_white_pixel_count != self.previous_white_pixel_count:
-            reward += (current_white_pixel_count - self.previous_white_pixel_count)/100.0  # You can adjust the reward value as needed # TODO CHANGE REWARD
-        else:
+        if current_white_pixel_count > self.previous_white_pixel_count:
+            #reward += (current_white_pixel_count - self.previous_white_pixel_count)/100.0  # You can adjust the reward value as needed # TODO CHANGE REWARD
+            reward+=2.0
+            print("reward dur to increase in pixel count")
+        elif current_white_pixel_count < self.previous_white_pixel_count:
+            reward += -2.0 #just for avoiding taking action that dont really help increase graspability of target object
+            print("penalty due to decrease in pixel count")
+        elif current_white_pixel_count < self.previous_white_pixel_count:
             reward += -1.0 #just for avoiding taking action that dont really help increase graspability of target object
-
+            print("penalty due to no change in pixel count")
+            
         clutter_density=self.clutter_map
         current_total_clutter_density = np.sum(clutter_density)
         centroid=self.centroid
         reduction_radius=40 #gripper length
+        current_local_clutter_density=0
 
         #reward for cluster denisty
         if current_white_pixel_count == 0:#if obj not seen
-            # # Reward the robot for moving towards high clutter density areas
-            # high_clutter_density_reward = 0.001 * current_total_clutter_density
-            # Penalize if clutter is not reduced
-            clutter_reduction_penalty = 0.001 * (self.previous_total_clutter_density - current_total_clutter_density)
-        
-            #reward += high_clutter_density_reward + clutter_reduction_penalty
-            reward -= clutter_reduction_penalty       
+            
+            if current_total_clutter_density>=self.previous_total_clutter_density:
+                reward-=3
+                print("penalty due to no change or increase in clutter density")
+            elif current_total_clutter_density<self.previous_total_clutter_density:
+                print("Reward due to decrease in clutter density")
+                reward=+3   
      
         else:#  If the object is seen, push to reduce clutter density around it
             # Ensure centroid is provided
-            if centroid!=[-1.0,-1.0]:
-                cx, cy = centroid
+            if not np.array_equal(self.centroid, np.array([-1.0, -1.0], dtype=np.float32)):
+                cx, cy = int(centroid[0]), int(centroid[1])
                 # Focus on reducing clutter in the area around the centroid
                 reduction_area = clutter_density[max(0, cy-reduction_radius):min(clutter_density.shape[0], cy+reduction_radius),
                                                     max(0, cx-reduction_radius):min(clutter_density.shape[1], cx+reduction_radius)]
                 # Calculate clutter density in this region
                 current_local_clutter_density = np.sum(reduction_area)
-
-                # Reward for reducing clutter around the centroid
-                reward -= 0.01 * (self.previous_local_clutter_density - current_local_clutter_density)
+                
+                if current_local_clutter_density>=self.previous_local_clutter_density:
+                    reward-=3
+                    print("Penalty due to no change or increase in local clutter density")
+                elif current_local_clutter_density<self.previous_local_clutter_density:
+                    reward+=3
+                    print("Reward due to decrease in local clutter density")
+                    
         
                 
 
@@ -498,6 +504,7 @@ class NiryoRobotEnv(gym.Env):
         self.previous_local_clutter_density=current_local_clutter_density
         print(f'Reward:  {reward} , Done:  {self.done}')
         return reward, self.done
+
 
 class TensorBoardCallback(BaseCallback):
     def __init__(self, log_dir: str):
