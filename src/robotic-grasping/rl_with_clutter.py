@@ -106,20 +106,6 @@ def push_along_line_from_action(action, z=0.1, debug=False):
 
     return True
 
-def check_state_values(state):
-    for key, value in state.items():
-        if isinstance(value, np.ndarray):
-            # If the array is non-empty and has truthy values
-            if not np.any(value):
-                rospy.loginfo(f"Array in key '{key}' is falsy or empty.")
-                return False
-        else:
-            # If value is not an array, check it directly
-            if not value:
-                rospy.loginfo(f"Value for key '{key}' is falsy.")
-                return False
-    return True
-
 def calculate_pixel_clutter_density(rgb_image,depth_image):
     if rgb_image is None or depth_image is None:
         return None
@@ -237,6 +223,8 @@ class NiryoRobotEnv(gym.Env):
         high_limits = np.array([xmax_limit, ymax_limit, zmax_limit, thetamax_limit, lenmax_limit])
 
         self.action_space = spaces.Box(low=low_limits, high=high_limits,shape = (5,), dtype=np.float32)
+        
+        self.episode_count=0
 
     def reset(self):
         print('in reset')
@@ -247,7 +235,6 @@ class NiryoRobotEnv(gym.Env):
             self.previous_local_clutter_density=1000 #TODO: change it
             # Episode tracking variables
             self.current_episode_reward = 0
-            self.episode_count = 0
             self.current_step = 0  # Initialize current step
 
             
@@ -398,6 +385,10 @@ class NiryoRobotEnv(gym.Env):
         except Exception as e:      # TODO NEGATIVE REWARD FOR COLLISION
             rospy.logwarn(f"Exception occurred: {e}")
             niryo_robot.clear_collision_detected()
+            self.current_step += 1
+            
+            reward,self.done = self.compute_reward(state)
+            self.current_episode_reward += reward
 
             state = self.get_state()
             while state is None:
@@ -467,23 +458,33 @@ class NiryoRobotEnv(gym.Env):
             # # Reward the robot for moving towards high clutter density areas
             # high_clutter_density_reward = 0.001 * current_total_clutter_density
             # Penalize if clutter is not reduced
-            clutter_reduction_penalty = 0.001 * (self.previous_total_clutter_density - current_total_clutter_density)
+            #clutter_reduction_penalty = 0.001 * (self.previous_total_clutter_density - current_total_clutter_density)
         
             #reward += high_clutter_density_reward + clutter_reduction_penalty
-            reward -= clutter_reduction_penalty       
+            #reward -= clutter_reduction_penalty    
+            
+            if current_local_clutter_density>=self.previous_total_clutter_density:
+                reward-=2
+            elif current_local_clutter_density<self.previous_total_clutter_density:
+                reward=+2   
      
         else:#  If the object is seen, push to reduce clutter density around it
             # Ensure centroid is provided
-            if centroid!=[-1.0,-1.0]:
-                cx, cy = centroid
+            if not np.array_equal(self.centroid, np.array([-1.0, -1.0], dtype=np.float32)):
+                cx, cy = int(centroid[0]), int(centroid[1])
                 # Focus on reducing clutter in the area around the centroid
                 reduction_area = clutter_density[max(0, cy-reduction_radius):min(clutter_density.shape[0], cy+reduction_radius),
                                                     max(0, cx-reduction_radius):min(clutter_density.shape[1], cx+reduction_radius)]
                 # Calculate clutter density in this region
                 current_local_clutter_density = np.sum(reduction_area)
 
-                # Reward for reducing clutter around the centroid
-                reward -= 0.01 * (self.previous_local_clutter_density - current_local_clutter_density)
+                # # Reward for reducing clutter around the centroid
+                # reward -= 0.01 * (self.previous_local_clutter_density - current_local_clutter_density)
+                
+                if current_local_clutter_density>=self.previous_local_clutter_density:
+                    reward-=2
+                elif current_local_clutter_density<self.previous_local_clutter_density:
+                    reward+=2
         
                 
 
@@ -533,7 +534,7 @@ if __name__ == "__main__":
     env = DummyVecEnv([lambda: NiryoRobotEnv()])
 
     # Set up SAC model with a specified buffer size
-    model = SAC("MultiInputPolicy", env, verbose=1, buffer_size=5000)  # Set buffer size here
+    model = SAC("MultiInputPolicy", env, learning_rate=0.0009, ent_coef='auto', verbose=1, buffer_size=50000)  # Set buffer size here
 
     # Set up a checkpoint callback to save the model periodically
     checkpoint_callback = CheckpointCallback(save_freq=1000, save_path='./logs/',
@@ -548,11 +549,4 @@ if __name__ == "__main__":
     # Save the trained model
     model.save("niryo_sac_model")
     print("Congratulations!!!!! Training done, live long and prosper ;)")
-    # done = True
-    # # After training, you can evaluate or use the trained model:
-    # obs = env.reset()
-    # for _ in range(1000):
-    #     action, _states = model.predict(obs)
-    #     obs, reward, done, info = env.step(action)
-    #     if done:
-    #         obs = env.reset()
+    
