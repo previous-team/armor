@@ -26,7 +26,7 @@ from torch.utils.tensorboard import SummaryWriter
 
 def parse_args():
     parser = argparse.ArgumentParser(description='Evaluate network')
-    parser.add_argument('--network', type=str, default='src/robotic-grasping/trained-models/cornell-randsplit-rgbd-grconvnet3-drop1-ch16/epoch_17_iou_0.96',
+    parser.add_argument('--network', type=str, default='/home/archanaa/armor/capstone_armor/src/robotic-grasping/trained-models/cornell-randsplit-rgbd-grconvnet3-drop1-ch16/epoch_17_iou_0.96',
                         help='Path to saved network to evaluate')
     parser.add_argument('--use-depth', type=int, default=1,
                         help='Use Depth image for evaluation (1/0)')
@@ -40,9 +40,16 @@ def parse_args():
     args = parser.parse_args()
     return args
 
-
-def denormalize_action(action, action_min, action_max):
-    return action_min + (action_max - action_min) * action
+def denormalize_action(action, action_min, action_max, range_length=1):
+    '''
+    Denormalizes the action values to the real-world values.
+    action: the normalized action value
+    action_min: minimum value of the action
+    action_max: maximum value of the action
+    '''
+    # range_length =1 for normalised values between 0 and 1
+    # range_length=2 for normalised values between -1 and 1
+    return (action/range_length)*(action_max-action_min) 
 
 def push_along_line_from_action(action, z=0.1, debug=False):
     '''
@@ -60,19 +67,21 @@ def push_along_line_from_action(action, z=0.1, debug=False):
     real_y_min, real_y_max = -0.132, 0.132  
     real_z_min, real_z_max = 0.0, 0.1 
     real_theta_min, real_theta_max = -180,180
-    real_length_min, real_length_max = 0.0,(0.158*0.6) # *0.6 of workspace  #antipodal paper reference 
+    workspace_length = max(real_x_max - real_x_min, real_y_max - real_y_min)
+    real_length_min, real_length_max = 0.2 * workspace_length, 0.8 * workspace_length  # Limit the min and max length proportional to the workspace length
 
     # Normalized action values
     # Clipping the normalized action values to ensure they are within range
-    norm_x, norm_y, norm_z, norm_theta, norm_length = np.clip(action, [0, -1, 0, -1, 0], [1, 1, 1, 1, 1])
+    # norm_x, norm_y, norm_z, norm_theta, norm_length = np.clip(action, [0, -1, 0, -1, 0], [1, 1, 1, 1, 1])
+    norm_x, norm_y, norm_z, norm_theta, norm_length = action
     print(f'Action normalized: {norm_x,norm_y,norm_z,norm_theta,norm_length}')
 
     # Denormalize each action dimension
     x = denormalize_action(norm_x, real_x_min, real_x_max)
-    y = denormalize_action(norm_y, real_y_min, real_y_max)
+    y = denormalize_action(norm_y, real_y_min, real_y_max,2)
     z = denormalize_action(norm_z, real_z_min, real_z_max)
-    theta = denormalize_action(norm_theta, real_theta_min, real_theta_max)
-    theta = np.clip(theta,-180,180)
+    theta = denormalize_action(norm_theta, real_theta_min, real_theta_max,2)
+    # theta = np.clip(theta,-180,180)
     theta_radians = math.radians(theta)
     length = denormalize_action(norm_length, real_length_min, real_length_max)
     print(f'Action denormalized: {x,y,z,theta,length}')
@@ -224,14 +233,17 @@ class NiryoRobotEnv(gym.Env):
 
         self.action_space = spaces.Box(low=low_limits, high=high_limits,shape = (5,), dtype=np.float32)
         self.episode_count=0
+        
+        #RL tuning params
+        self.normalize_images = False
 
     def reset(self):
         print('in reset')
         try:
             state = spaces.Dict()
             self.previous_white_pixel_count = 0
-            self.previous_total_clutter_density=10000 #TODO : Change it
-            self.previous_local_clutter_density=1000 #TODO: change it
+            self.previous_total_clutter_density=50176 #(224*224) 
+            self.previous_local_clutter_density=2827 #(pi*30*30) #local clutter density radius is 30
             # Episode tracking variables
             self.current_episode_reward = 0
         
@@ -317,7 +329,7 @@ class NiryoRobotEnv(gym.Env):
         white_pixel_count = stats[:, cv2.CC_STAT_AREA].sum()  # Total white pixel count
         # print(f'num_labels{num_labels}')
         self.centroid = centroids[0] if num_labels > 1 else np.array([-1.0, -1.0], dtype=np.float32)  # Handle invalid case
-
+        print(f'Centroid:::::::::{self.centroid}')
         # # Calculate the centroid of the masked area (if there are white pixels)
         # M = cv2.moments(mask_image)
         # if M["m00"] > 0:  # Ensure there are white pixels
@@ -330,7 +342,7 @@ class NiryoRobotEnv(gym.Env):
         #print(f'color image shape{color_image.shape}')
 
         gray_image = cv2.cvtColor(color_image,cv2.COLOR_RGB2GRAY)
-        gray_image_normalised = cv2.normalize(gray_image, None, 0, 255, cv2.NORM_MINMAX) #normalising the grayscaled normalised rgb image
+        gray_image_normalised = cv2.normalize(gray_image, None, 0, 1, cv2.NORM_MINMAX) #normalising the grayscaled normalised rgb image
             
         # gray_image_normalised = np.expand_dims(gray_image_normalised, axis=-1)
         # gray_image_normalised = gray_image_normalised.reshape(224,224,1)
@@ -350,7 +362,7 @@ class NiryoRobotEnv(gym.Env):
             'white_pixel_count': np.array(self.current_pixel_count, dtype=np.int32),# Send number of white pixels and centroid coordinates
             'centroid':np.array(self.centroid,dtype = np.float32)
         }
-        #print(f"State: {state}")
+        print(f"State: {state}")
         
         return state
 
@@ -396,11 +408,12 @@ class NiryoRobotEnv(gym.Env):
                     rospy.loginfo("Waiting for valid state...")
 
             # Penalize for the collision
-            self.current_episode_reward -= 5
+            
             self.collision_count += 1
 
             # Check if the number of collisions exceeds the maximum allowed
             if self.collision_count >= self.max_collisions:
+                self.current_episode_reward -= 5
                 self.done = True
                 rospy.logwarn(f"Maximum collision limit reached ({self.max_collisions}). Ending episode.")
             else:
@@ -453,30 +466,30 @@ class NiryoRobotEnv(gym.Env):
         # Reward for increasing white pixel count
         if current_white_pixel_count > self.previous_white_pixel_count:
             #reward += (current_white_pixel_count - self.previous_white_pixel_count)/100.0  # You can adjust the reward value as needed # TODO CHANGE REWARD
-            reward+=2.0
+            reward += 2.0
             print("reward dur to increase in pixel count")
         elif current_white_pixel_count < self.previous_white_pixel_count:
             reward += -2.0 #just for avoiding taking action that dont really help increase graspability of target object
             print("penalty due to decrease in pixel count")
-        elif current_white_pixel_count < self.previous_white_pixel_count:
-            reward += -1.0 #just for avoiding taking action that dont really help increase graspability of target object
-            print("penalty due to no change in pixel count")
+        # elif current_white_pixel_count == self.previous_white_pixel_count:
+        #     reward += -1.0 #just for avoiding taking action that dont really help increase graspability of target object
+        #     print("penalty due to no change in pixel count")
             
         clutter_density=self.clutter_map
         current_total_clutter_density = np.sum(clutter_density)
         centroid=self.centroid
-        reduction_radius=40 #gripper length
+        reduction_radius=30 #gripper length
         current_local_clutter_density=0
 
         #reward for cluster denisty
         if current_white_pixel_count == 0:#if obj not seen
-            
+            print(f'Current total clutter desnity when occuled: {current_total_clutter_density}')
             if current_total_clutter_density>=self.previous_total_clutter_density:
-                reward-=3
+                reward -= 3
                 print("penalty due to no change or increase in clutter density")
             elif current_total_clutter_density<self.previous_total_clutter_density:
                 print("Reward due to decrease in clutter density")
-                reward=+3   
+                reward += 3   
      
         else:#  If the object is seen, push to reduce clutter density around it
             # Ensure centroid is provided
@@ -487,12 +500,13 @@ class NiryoRobotEnv(gym.Env):
                                                     max(0, cx-reduction_radius):min(clutter_density.shape[1], cx+reduction_radius)]
                 # Calculate clutter density in this region
                 current_local_clutter_density = np.sum(reduction_area)
+                print(f'Current local clutter desnity when visible: {current_local_clutter_density}')
                 
                 if current_local_clutter_density>=self.previous_local_clutter_density:
-                    reward-=3
+                    reward -= 3
                     print("Penalty due to no change or increase in local clutter density")
                 elif current_local_clutter_density<self.previous_local_clutter_density:
-                    reward+=3
+                    reward += 3
                     print("Reward due to decrease in local clutter density")
                     
         
@@ -545,7 +559,7 @@ if __name__ == "__main__":
     env = DummyVecEnv([lambda: NiryoRobotEnv()])
 
     # Set up SAC model with a specified buffer size
-    model = SAC("MultiInputPolicy", env, verbose=1, buffer_size=5000)  # Set buffer size here
+    model = SAC("MultiInputPolicy", env, verbose=1, buffer_size=50000)  # Set buffer size here
 
     # Set up a checkpoint callback to save the model periodically
     checkpoint_callback = CheckpointCallback(save_freq=1000, save_path='./logs/',
