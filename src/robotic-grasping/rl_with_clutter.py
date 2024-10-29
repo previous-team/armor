@@ -207,7 +207,7 @@ class NiryoRobotEnv(gym.Env):
         # Observation space initialization
         self.observation_space = spaces.Dict({
             'gray': spaces.Box(low=gray_low, high=gray_high, shape=(img_height, img_width), dtype=np.uint8), #grayscale image
-            'depth': spaces.Box(low=depth_low, high=depth_high, shape=(img_height, img_width,1), dtype=np.float32),
+            'depth': spaces.Box(low=depth_low, high=depth_high, shape=(img_height, img_width), dtype=np.float32),
             'clutter_density': spaces.Box(low=clutter_low, high=clutter_high, shape=(img_height, img_width), dtype=np.float32),
             'white_pixel_count': spaces.Box(low=white_pixel_count_low, high=white_pixel_count_high, shape=(1,), dtype=np.int32),
             'centroid': spaces.Box(low=centroid_low, high=centroid_high, shape=(2,), dtype=np.float32)  # 2D centroid (X, Y)
@@ -237,6 +237,8 @@ class NiryoRobotEnv(gym.Env):
         
         #RL tuning params
         self.normalize_images = False
+
+        self.obj = Graspable(network_path=self.args.network,force_cpu=False)
 
     def reset(self):
         print('in reset')
@@ -269,7 +271,7 @@ class NiryoRobotEnv(gym.Env):
             reset_simulation = rospy.ServiceProxy('/delete_and_spawn_models', delete_and_spawn_models)
             resp = reset_simulation()
 
-            rospy.sleep(0.3)
+            # rospy.sleep(0.3)
 
             # Return to home position
             res = niryo_robot.move_joints(0, 0.5, -1.25, 0, 0, 0)
@@ -298,9 +300,8 @@ class NiryoRobotEnv(gym.Env):
             rospy.loginfo("Waiting for valid images...")
         rgb = image_bundle['rgb']
         depth = image_bundle['aligned_depth']
-        x,depth_image, denormalised_depth, rgb_img = self.cam_data.get_data(rgb=rgb, depth=depth)
-        obj = Graspable(network_path=self.args.network,force_cpu=False)
-        self.graspable = obj.run_graspable(x,depth_image, denormalised_depth, rgb_img )
+        x,depth_image, denormalised_depth, rgb_img = self.cam_data.get_data(rgb=rgb, depth=depth)   
+        self.graspable = self.obj.run_graspable(x,depth_image, denormalised_depth, rgb_img )
         color_image = self.cam_data.get_rgb(rgb,False) # denormalised rgb image for masking of target object
 
 
@@ -349,7 +350,7 @@ class NiryoRobotEnv(gym.Env):
         
         # Add an extra dimension to the depth image to match the expected (224, 224, 1) shape
 
-        depth_image = depth_image.transpose((1,2,0))
+        depth_image = cv2.normalize(denormalised_depth, None, 0, 1, cv2.NORM_MINMAX)
         #print(f'gray{gray_image_normalised.shape}')
         #print(f'depth{depth_image.shape}')
         
@@ -362,7 +363,7 @@ class NiryoRobotEnv(gym.Env):
             'white_pixel_count': np.array(self.current_pixel_count, dtype=np.int32),# Send number of white pixels and centroid coordinates
             'centroid':np.array(self.centroid,dtype = np.float32)
         }
-        print(f"State: {state}")
+        #print(f"State: {state}")
         
         return state
 
@@ -380,7 +381,7 @@ class NiryoRobotEnv(gym.Env):
             if self.graspable == False:
                 # Perform push action using selected action
                 proceed = push_along_line_from_action(action) #put it after reward is computed TODO
-                rospy.sleep(0.1)
+                # rospy.sleep(0.1)
             state = self.get_state()
             while state is None:
                 state = self.get_state()
@@ -391,7 +392,8 @@ class NiryoRobotEnv(gym.Env):
             # Update current episode reward
             self.current_episode_reward += reward
         except Exception as e:      # TODO NEGATIVE REWARD FOR COLLISION
-            rospy.logwarn(f"Exception occurred: {e}")
+            rospy.logwarn(f"Exception occurred:{e}")
+            
             niryo_robot.clear_collision_detected()
             self.current_step += 1
             
@@ -405,20 +407,28 @@ class NiryoRobotEnv(gym.Env):
 
             # Penalize for the collision
             #self.current_episode_reward -= 5
-            self.collision_count += 1
+            # self.collision_count += 1
+
+            
 
             # Check if the number of collisions exceeds the maximum allowed
-            if self.collision_count >= self.max_collisions:
-                self.current_episode_reward -= 5
-                self.done = True
-                rospy.logwarn(f"Maximum collision limit reached ({self.max_collisions}). Ending episode.")
-            else:
-                self.done = False  # continue even after collision
-                
+            # print(f'{e}')
+            # if e == "Goal has been aborted : Command has been aborted due to a collision or a motor not able to follow the given trajectory":
+            #     self.current_episode_reward -= -5
+            #     self.done = True
+            # # if self.collision_count >= self.max_collisions:
+            # #     self.current_episode_reward -= 5
+            # #     self.done = True
+            # #     rospy.logwarn(f"Maximum collision limit reached ({self.max_collisions}). Ending episode.")
+            # else:
+            #     self.done = False  # continue even after collision
+
             reward,self.done = self.compute_reward(state)
             self.current_episode_reward += reward
+            self.current_episode_reward -= 0.5
+            
 
-            print(f"Collision detected. Total collisions: {self.collision_count}")
+            # print(f"Collision detected. Total collisions: {self.collision_count}")
 
         
         # Handle episode completion
