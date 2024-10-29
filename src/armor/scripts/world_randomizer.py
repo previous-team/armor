@@ -5,6 +5,7 @@ import rospkg
 import random
 from gazebo_msgs.srv import SpawnModel, DeleteModel
 from geometry_msgs.msg import Pose
+from gazebo_msgs.msg import ModelStates
 from armor.srv import delete_and_spawn_models, delete_and_spawn_modelsResponse
 import tf.transformations as tf_trans
 
@@ -78,33 +79,44 @@ def delete_model(model_name):
 # Service callback function
 def handle_delete_and_spawn(req):
     try:
+        while True:
         # Delete all models
-        for model in models:
-            delete_model(model["model_name"])
+            for model in models:
+                delete_model(model["model_name"])
 
-        # Always include the red cube
-        red_cube = [model for model in models if model["model_name"] == "cube_red_spawned"][0]
-        models_to_spawn = [red_cube]
+            # Always include the red cube
+            red_cube = [model for model in models if model["model_name"] == "cube_red_spawned"][0]
+            models_to_spawn = [red_cube]
 
-        # Randomize the number of additional models to spawn (between 10 and the max number of models - 1)
-        num_additional_models_to_spawn = random.randint(10, len(models) - 1)
-        
-        # Randomly select additional models to spawn
-        additional_models_to_spawn = random.sample([model for model in models if model["model_name"] != "cube_red_spawned"], num_additional_models_to_spawn)
-        
-        # Combine the red cube with the additional models
-        models_to_spawn.extend(additional_models_to_spawn)
+            # Randomize the number of additional models to spawn (between 10 and the max number of models - 1)
+            num_additional_models_to_spawn = random.randint(10, len(models) - 1)
+            
+            # Randomly select additional models to spawn
+            additional_models_to_spawn = random.sample([model for model in models if model["model_name"] != "cube_red_spawned"], num_additional_models_to_spawn)
+            
+            # Combine the red cube with the additional models
+            models_to_spawn.extend(additional_models_to_spawn)
 
-        # Iterate over the models to spawn and spawn each one at a random position and orientation
-        for model in models_to_spawn:
-            x = random.uniform(0.17, 0.42)  # Randomize x position between 0.17 and 0.42
-            y = random.uniform(-0.12, 0.12)  # Randomize y position between -0.12 and 0.12
-            z = random.uniform(0.2, 0.4)  # Randomize z position between 0.2 and 0.4
-            roll = random.uniform(0, 2 * 3.14159)  # Randomize roll between 0 and 2*pi
-            pitch = random.uniform(0, 2 * 3.14159)  # Randomize pitch between 0 and 2*pi
-            yaw = random.uniform(0, 2 * 3.14159)  # Randomize yaw between 0 and 2*pi
+            # Iterate over the models to spawn and spawn each one at a random position and orientation
+            for model in models_to_spawn:
+                x = random.uniform(0.17, 0.42)  # Randomize x position between 0.17 and 0.42
+                y = random.uniform(-0.12, 0.12)  # Randomize y position between -0.12 and 0.12
+                z = random.uniform(0.2, 0.4)  # Randomize z position between 0.2 and 0.4
+                roll = 0  # Roll is 0
+                pitch = 0  # Pitch is 0
+                yaw = random.uniform(0, 2 * 3.14159)  # Randomize yaw between 0 and 2*pi
 
-            spawn_model(model["sdf_file"], model["model_name"], x, y, z, roll, pitch, yaw)
+                spawn_model(model["sdf_file"], model["model_name"], x, y, z, roll, pitch, yaw)
+
+            rospy.sleep(1) # Wait for the models to spawn
+            # Check if the red cube is within the workspace boundaries
+            red_cube_pose = rospy.wait_for_message(f'/gazebo/model_states', ModelStates)
+            red_cube_index = red_cube_pose.name.index("cube_red_spawned")
+            red_cube_position = red_cube_pose.pose[red_cube_index].position
+
+            if 0.17 <= red_cube_position.x <= 0.42 and -0.12 <= red_cube_position.y <= 0.12:
+                break  # Red cube is within the workspace, exit the loop
+
 
         return delete_and_spawn_modelsResponse(status="Success")
     except Exception as e:
