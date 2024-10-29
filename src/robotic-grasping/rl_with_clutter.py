@@ -232,6 +232,7 @@ class NiryoRobotEnv(gym.Env):
         high_limits = np.array([xmax_limit, ymax_limit, zmax_limit, thetamax_limit, lenmax_limit])
 
         self.action_space = spaces.Box(low=low_limits, high=high_limits,shape = (5,), dtype=np.float32)
+        
         self.episode_count=0
         
         #RL tuning params
@@ -246,7 +247,6 @@ class NiryoRobotEnv(gym.Env):
             self.previous_local_clutter_density=2827 #(pi*30*30) #local clutter density radius is 30
             # Episode tracking variables
             self.current_episode_reward = 0
-        
             self.current_step = 0  # Initialize current step
 
             
@@ -329,6 +329,7 @@ class NiryoRobotEnv(gym.Env):
         white_pixel_count = stats[:, cv2.CC_STAT_AREA].sum()  # Total white pixel count
         # print(f'num_labels{num_labels}')
         self.centroid = centroids[0] if num_labels > 1 else np.array([-1.0, -1.0], dtype=np.float32)  # Handle invalid case
+<<<<<<< HEAD
         print(f'Centroid:::::::::{self.centroid}')
         # # Calculate the centroid of the masked area (if there are white pixels)
         # M = cv2.moments(mask_image)
@@ -369,11 +370,7 @@ class NiryoRobotEnv(gym.Env):
     def step(self, action):
         state = spaces.Dict()
         info = {}
-        # state = self.get_state()
-        # while state is None:
-        #     state = self.get_state()
-        #     if state is None:
-        #         rospy.loginfo("Waiting for valid state...")
+
         print('in step')
         try:
             # Increment the current step
@@ -408,7 +405,11 @@ class NiryoRobotEnv(gym.Env):
                     rospy.loginfo("Waiting for valid state...")
 
             # Penalize for the collision
+<<<<<<< HEAD
             
+=======
+            #self.current_episode_reward -= 5
+>>>>>>> 48040971d3bd052dc55554821cb46a7698a2b700
             self.collision_count += 1
 
             # Check if the number of collisions exceeds the maximum allowed
@@ -559,7 +560,7 @@ if __name__ == "__main__":
     env = DummyVecEnv([lambda: NiryoRobotEnv()])
 
     # Set up SAC model with a specified buffer size
-    model = SAC("MultiInputPolicy", env, verbose=1, buffer_size=50000)  # Set buffer size here
+    model = SAC("MultiInputPolicy", env, verbose=1, buffer_size=5000)  # Set buffer size here
 
     # Set up a checkpoint callback to save the model periodically
     checkpoint_callback = CheckpointCallback(save_freq=1000, save_path='./logs/',
