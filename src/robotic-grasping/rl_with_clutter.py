@@ -329,7 +329,6 @@ class NiryoRobotEnv(gym.Env):
         white_pixel_count = stats[:, cv2.CC_STAT_AREA].sum()  # Total white pixel count
         # print(f'num_labels{num_labels}')
         self.centroid = centroids[0] if num_labels > 1 else np.array([-1.0, -1.0], dtype=np.float32)  # Handle invalid case
-<<<<<<< HEAD
         print(f'Centroid:::::::::{self.centroid}')
         # # Calculate the centroid of the masked area (if there are white pixels)
         # M = cv2.moments(mask_image)
@@ -405,11 +404,7 @@ class NiryoRobotEnv(gym.Env):
                     rospy.loginfo("Waiting for valid state...")
 
             # Penalize for the collision
-<<<<<<< HEAD
-            
-=======
             #self.current_episode_reward -= 5
->>>>>>> 48040971d3bd052dc55554821cb46a7698a2b700
             self.collision_count += 1
 
             # Check if the number of collisions exceeds the maximum allowed
