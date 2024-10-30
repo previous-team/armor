@@ -26,7 +26,7 @@ from torch.utils.tensorboard import SummaryWriter
 
 def parse_args():
     parser = argparse.ArgumentParser(description='Evaluate network')
-    parser.add_argument('--network', type=str, default='src/robotic-grasping/trained-models/cornell-randsplit-rgbd-grconvnet3-drop1-ch16/epoch_17_iou_0.96',
+    parser.add_argument('--network', type=str, default='/home/archanaa/armor/capstone_armor/src/robotic-grasping/trained-models/cornell-randsplit-rgbd-grconvnet3-drop1-ch16/epoch_17_iou_0.96',
                         help='Path to saved network to evaluate')
     parser.add_argument('--use-depth', type=int, default=1,
                         help='Use Depth image for evaluation (1/0)')
@@ -40,17 +40,32 @@ def parse_args():
     args = parser.parse_args()
     return args
 
-def denormalize_action(action, action_min, action_max, range_length=1):
+# def denormalize_action(action, action_min, action_max, range_length=1):
+#     '''
+#     Denormalizes the action values to the real-world values.
+#     action: the normalized action value
+#     action_min: minimum value of the action
+#     action_max: maximum value of the action
+#     '''
+#     # range_length =1 for normalised values between 0 and 1
+#     # range_length=2 for normalised values between -1 and 1
+#     print(f'denorm value{(action/range_length)*(action_max-action_min)}')
+#     return (action/range_length)*(action_max-action_min) 
+
+def denormalize_action(action, action_min, action_max, normailized_min=0):
     '''
     Denormalizes the action values to the real-world values.
     action: the normalized action value
     action_min: minimum value of the action
     action_max: maximum value of the action
     '''
-    # range_length =1 for normalised values between 0 and 1
-    # range_length=2 for normalised values between -1 and 1
-    return (action/range_length)*(action_max-action_min) 
-
+    print(f'action:   {action}')
+    
+    if normailized_min == -1:
+        return action_min + 0.5 * (action_max - action_min) * (1 + action)
+    else:
+        return action_min + (action_max - action_min) * action
+    
 def push_along_line_from_action(action, z=0.1, debug=False):
     '''
     Pushes the robot along a line, where the action vector defines the push.
@@ -67,8 +82,8 @@ def push_along_line_from_action(action, z=0.1, debug=False):
     real_y_min, real_y_max = -0.132, 0.132  
     real_z_min, real_z_max = 0.0, 0.1 
     real_theta_min, real_theta_max = -180,180
-    workspace_length = max(real_x_max - real_x_min, real_y_max - real_y_min)
-    real_length_min, real_length_max = 0.2 * workspace_length, 0.8 * workspace_length  # Limit the min and max length proportional to the workspace length
+    workspace_length = max(real_x_max - real_x_min, real_y_max - real_y_min)#min(0.265,0.264)
+    real_length_min, real_length_max = 0.1 * workspace_length, 0.5 * workspace_length  # Limit the min and max length proportional to the workspace length
 
     # Normalized action values
     # Clipping the normalized action values to ensure they are within range
@@ -78,13 +93,14 @@ def push_along_line_from_action(action, z=0.1, debug=False):
 
     # Denormalize each action dimension
     x = denormalize_action(norm_x, real_x_min, real_x_max)
-    y = denormalize_action(norm_y, real_y_min, real_y_max,2)
+    y = denormalize_action(norm_y, real_y_min, real_y_max,-1)
     z = denormalize_action(norm_z, real_z_min, real_z_max)
-    theta = denormalize_action(norm_theta, real_theta_min, real_theta_max,2)
+    theta = denormalize_action(norm_theta, real_theta_min, real_theta_max,-1)
     # theta = np.clip(theta,-180,180)
     theta_radians = math.radians(theta)
     length = denormalize_action(norm_length, real_length_min, real_length_max)
     print(f'Action denormalized: {x,y,z,theta,length}')
+
     # Go to home position
     res = niryo_robot.move_joints(0, 0.5, -1.25, 0, 0, 0)
     if debug and res and res[0] == 1:
@@ -173,6 +189,24 @@ def calculate_pixel_clutter_density(rgb_image):
         calculate_pixel_clutter_density(rgb_image)
     return clutter_density_normalized
 
+    def go_to_home_position(debug=False):
+        '''
+        Moves the robot to the home position
+        '''
+        try:
+            res = niryo_robot.move_joints(0, 0.5, -1.25, 0, 0, 0)
+            while not res or res[0] != 1:
+                res = niryo_robot.move_joints(0, 0.5, -1.25, 0, 0, 0)
+            if debug:
+                print("Moved to home position")
+        except NiryoRosWrapperException as e:
+            print(f"Error occurred: {e}")
+            niryo_robot.clear_collision_detected()
+            res = niryo_robot.move_joints(0, 0.5, -1.25, 0, 0, 0)
+            if not res or res[0] != 1:
+                print("Error moving to home position")
+
+        return res
 
 # Define the custom Niryo environment
 class NiryoRobotEnv(gym.Env):
@@ -209,7 +243,7 @@ class NiryoRobotEnv(gym.Env):
         # Observation space initialization
         self.observation_space = spaces.Dict({
             'gray': spaces.Box(low=gray_low, high=gray_high, shape=(img_height, img_width), dtype=np.uint8), #grayscale image
-            'depth': spaces.Box(low=depth_low, high=depth_high, shape=(img_height, img_width,1), dtype=np.float32),
+            'depth': spaces.Box(low=depth_low, high=depth_high, shape=(img_height, img_width), dtype=np.float32),
             'clutter_density': spaces.Box(low=clutter_low, high=clutter_high, shape=(img_height, img_width), dtype=np.float32),
             'white_pixel_count': spaces.Box(low=white_pixel_count_low, high=white_pixel_count_high, shape=(1,), dtype=np.int32),
             'centroid': spaces.Box(low=centroid_low, high=centroid_high, shape=(2,), dtype=np.float32)  # 2D centroid (X, Y)
@@ -236,6 +270,7 @@ class NiryoRobotEnv(gym.Env):
         self.action_space = spaces.Box(low=low_limits, high=high_limits,shape = (5,), dtype=np.float32)
         
         self.episode_count=0
+        self.obj = Graspable(network_path=self.args.network,force_cpu=False)
         
         #RL tuning params
         self.normalize_images = False
@@ -305,8 +340,8 @@ class NiryoRobotEnv(gym.Env):
         x,depth_image, denormalised_depth, rgb_img = self.cam_data.get_data(rgb=rgb, depth=depth)
         min_abs, max_abs = 10, 100
         depth_image = np.clip((denormalised_depth - min_abs) / (max_abs - min_abs), 0, 1)# DENORMALISED DEPTH IMAGE IS NORMALISED USING OUR FUNCTION
-        obj = Graspable(network_path=self.args.network,force_cpu=False)
-        self.graspable = obj.run_graspable(x,depth_image, denormalised_depth, rgb_img )
+        depth_image = depth_image.squeeze()
+        self.graspable = self.obj.run_graspable(x,depth_image, denormalised_depth, rgb_img )
         color_image = self.cam_data.get_rgb(rgb,False) # denormalised rgb image for masking of target object
 
 
@@ -359,64 +394,41 @@ class NiryoRobotEnv(gym.Env):
         return state
 
     def step(self, action):
+        # Initialize the state and info
         state = spaces.Dict()
         info = {}
 
-        print('in step')
+        # Increment the current step and initialize the reward
+        self.current_step += 1
+        reward = 0
+
         try:
-            # Increment the current step
-            self.current_step += 1
-            reward = 0 
-            # After pushing, get new state and compute reward
-            
+            # Check if the target object is graspable
             if self.graspable == False:
                 # Perform push action using selected action
-                proceed = push_along_line_from_action(action) 
-                rospy.sleep(1)
-            state = self.get_state()
-            while state is None:
-                state = self.get_state()
-                if state is None:
-                    rospy.loginfo("Waiting for valid state...")
+                proceed = push_along_line_from_action(action)
+                rospy.sleep(0.1)
 
-            reward,self.done = self.compute_reward(state)
-            # Update current episode reward
-            self.current_episode_reward += reward
-        except Exception as e:      # TODO NEGATIVE REWARD FOR COLLISION
-            rospy.logwarn(f"Exception occurred:{e}")
-            
+        except Exception as e:
+            # Log the exception and clear the collision detected flag
+            rospy.logwarn(f"Exception occurred: {e}")
             niryo_robot.clear_collision_detected()
-            self.current_step += 1
-            
-
-
-            state = self.get_state()
-            while state is None:
-                state = self.get_state()
-                if state is None:
-                    rospy.loginfo("Waiting for valid state...")
 
             # Penalize for the collision
-            #self.current_episode_reward -= 5
-            # self.collision_count += 1
+            reward -= 2
+        
+        finally:
+            # Get the new state
+            state = self.get_state()
 
-            
+            # Compute the reward and check if the episode is done
+            computed_reward, self.done = self.compute_reward(state)
 
-            # Check if the number of collisions exceeds the maximum allowed
-            # print(f'{e}')
-            # if e == "Goal has been aborted : Command has been aborted due to a collision or a motor not able to follow the given trajectory":
-            #     self.current_episode_reward -= -5
-            #     self.done = True
-            # # if self.collision_count >= self.max_collisions:
-            # #     self.current_episode_reward -= 5
-            # #     self.done = True
-            # #     rospy.logwarn(f"Maximum collision limit reached ({self.max_collisions}). Ending episode.")
-            # else:
-            #     self.done = False  # continue even after collision
+            # Update the reward
+            reward += computed_reward
 
-            reward,self.done = self.compute_reward(state)
+            # Update current episode reward
             self.current_episode_reward += reward
-            self.current_episode_reward -= 0.5
 
         
         # Handle episode completion
@@ -429,9 +441,7 @@ class NiryoRobotEnv(gym.Env):
             }
         print(f'Current episode reward : {self.current_episode_reward}')
 
-        return state, self.current_episode_reward,self.done, info
-
-
+        return state, reward, self.done, info
 
     def compute_reward(self, state):
         print('in reward')
@@ -552,7 +562,7 @@ if __name__ == "__main__":
     env = DummyVecEnv([lambda: NiryoRobotEnv()])
 
     # Set up SAC model with a specified buffer size
-    model = SAC("MultiInputPolicy", env, verbose=1, buffer_size=5000)  # Set buffer size here
+    model = SAC("MultiInputPolicy", env, verbose=1, buffer_size=10000)  # Set buffer size here
 
     # Set up a checkpoint callback to save the model periodically
     checkpoint_callback = CheckpointCallback(save_freq=1000, save_path='./logs/',
@@ -562,7 +572,7 @@ if __name__ == "__main__":
     tensorboard_callback = TensorBoardCallback(log_dir='./logs/tensorboard/')
    
     # Train the model with the callbacks
-    model.learn(total_timesteps=100000, callback=[checkpoint_callback, tensorboard_callback])
+    model.learn(total_timesteps=50000, callback=[checkpoint_callback, tensorboard_callback])
 
     # Save the trained model
     model.save("niryo_sac_model")
