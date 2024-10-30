@@ -73,7 +73,7 @@ def push_along_line_from_action(action, debug=False):
     # Define the real-world limits for each action dimension
     real_x_min, real_x_max = 0.167, 0.432
     real_y_min, real_y_max = -0.132, 0.132
-    real_z_min, real_z_max = 0.0, 0.1 
+    real_z_min, real_z_max = 0.0, 0.05 
 
     workspace_length = min(real_x_max - real_x_min, real_y_max - real_y_min)
 
@@ -432,17 +432,16 @@ if __name__ == "__main__":
     env = DummyVecEnv([lambda: NiryoRobotEnv()])
 
     # Set up SAC model with a specified buffer size
-    model = SAC("MultiInputPolicy", env, verbose=1, buffer_size=20)  # Set buffer size here
+    model = SAC("MultiInputPolicy", env, verbose=1, buffer_size=5000)  # Set buffer size here
 
     # Set up a checkpoint callback to save the model periodically
-    checkpoint_callback = CheckpointCallback(save_freq=10, save_path='./logs/',
-                                            name_prefix='niryo_sac_model')
+    checkpoint_callback = CheckpointCallback(save_freq=5000, save_path='./logs/', name_prefix='niryo_sac_model')
 
     # Set up a TensorBoard callback
     tensorboard_callback = TensorBoardCallback(log_dir='./logs/tensorboard/')
    
     # Train the model with the callbacks
-    total_timesteps = 100
+    total_timesteps = 100000
     model.learn(total_timesteps=total_timesteps, callback=[checkpoint_callback, tensorboard_callback])
 
     # Save the trained model

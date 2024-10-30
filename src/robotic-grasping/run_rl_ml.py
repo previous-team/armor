@@ -144,47 +144,43 @@ def filter_grasps(grasps, img, depth_img, fx, fy, ppx, ppy, red_thresh=0, green_
             img[1, cy, cx] > green_thresh and 
             img[2, cy, cx] > blue_thresh):
             
-            
-            center=[cx,cy]
-            depth=depth_img[cy, cx]
-            center_position = deproject_pixel_to_point(depth, center, ppx, ppy, fx, fy)
-            # Draw rectangle points
-            rect_points = draw_rectangle(center_position, g.angle, g.length, g.width)
-            #print("Rectanngle points", rect_points)
-            
-            pixel_points=[]
-            for pt in rect_points:
-                p_p=project_point_to_pixel(depth, pt, ppx, ppy, fx, fy)
-                pixel_points.append(p_p)
-            # print("Pixel_points:",pixel_points)
+            angles = np.linspace(0, 2 * np.pi, 16) # 16 angles for the rectangle
+            # Insert obtained angle from ML to the first index
+            angles = np.insert(angles, 0, g.angle)
+
+            # Check if it is graspable at any angle
+            for angle in angles:
+                center=[cx,cy]
+                depth=depth_img[cy, cx]
+                center_position = deproject_pixel_to_point(depth, center, ppx, ppy, fx, fy)
+                # Draw rectangle points
+                rect_points = draw_rectangle(center_position, g.angle, g.length, g.width)
                 
-            
-            #print("length:",g.length)
-            #print("width:",g.width)
-            #print(rect_points)
-            
-            # Check depth constraint
-            center_depth = depth_img[cy, cx]
-            #print("Center:",center_depth)
-            is_valid_grasp = True
-            
-            for x in range(0,len(rect_points)):
-                # Sample points from center to each rectangle corner
-                p1=pixel_points[x]
-                p2=pixel_points[(x+2)%4]
-                line_points = sample_points_along_line(p1, p2, num_depth_checks)
-                for pt in line_points:
-                    y,x = int(pt[0]), int(pt[1])
-                    #print(depth_img[y,x])
-                    #if 0 <= x < depth_img.shape[1] and 0 <= y < depth_img.shape[0]:
-                    if (0 <= x < 224) and (0 <= y < 224) and depth_img[y, x] <= center_depth:
-                        #print("not graspable at pts:",(x,y))
-                        is_valid_grasp = False
-                        break
+                pixel_points=[]
+                for pt in rect_points:
+                    p_p=project_point_to_pixel(depth, pt, ppx, ppy, fx, fy)
+                    pixel_points.append(p_p)
                 
-            
-            if is_valid_grasp:
-                filtered_grasps.append(g)
+                # Check depth constraint
+                center_depth = depth_img[cy, cx]
+                is_valid_grasp = True
+                
+                for x in range(0,len(rect_points)):
+                    # Sample points from center to each rectangle corner
+                    p1=pixel_points[x]
+                    p2=pixel_points[(x+2)%4]
+                    line_points = sample_points_along_line(p1, p2, num_depth_checks)
+                    for pt in line_points:
+                        y,x = int(pt[0]), int(pt[1])
+                        if (0 <= x < 224) and (0 <= y < 224) and depth_img[y, x] <= center_depth:
+                            is_valid_grasp = False
+                            break
+                    
+                
+                if is_valid_grasp:
+                    g.angle = angle  # Update the angle
+                    filtered_grasps.append(g)
+                    break
 
     return filtered_grasps
 
