@@ -1,14 +1,10 @@
 import rospy
 import argparse
-from std_msgs.msg import Bool
 import numpy as np
-import torch
 import math
 import cv2
 from niryo_robot_python_ros_wrapper import *
-import random
-from cv_bridge import CvBridge
-from sensor_msgs.msg import Image
+from niryo_robot_utils import NiryoRosWrapperException
 from stable_baselines3 import SAC
 from stable_baselines3.common.buffers import ReplayBuffer
 from stable_baselines3.common.vec_env import DummyVecEnv
@@ -21,19 +17,15 @@ from armor.srv import delete_and_spawn_models
 
 import gym
 from gym import spaces
-from std_srvs.srv import Empty
 from torch.utils.tensorboard import SummaryWriter
 
 def parse_args():
+    '''
+    Parse the arguments for the script
+    '''
     parser = argparse.ArgumentParser(description='Evaluate network')
     parser.add_argument('--network', type=str, default='src/robotic-grasping/trained-models/cornell-randsplit-rgbd-grconvnet3-drop1-ch16/epoch_17_iou_0.96',
                         help='Path to saved network to evaluate')
-    parser.add_argument('--use-depth', type=int, default=1,
-                        help='Use Depth image for evaluation (1/0)')
-    parser.add_argument('--use-rgb', type=int, default=1,
-                        help='Use RGB image for evaluation (1/0)')
-    parser.add_argument('--n-grasps', type=int, default=1,
-                        help='Number of grasps to consider per image')
     parser.add_argument('--cpu', dest='force_cpu', action='store_true', default=False,
                         help='Force code to run in CPU mode')
 
@@ -41,45 +33,66 @@ def parse_args():
     return args
 
 
-def denormalize_action(action, action_min, action_max):
-    return action_min + (action_max - action_min) * action
+def denormalize_action(action, action_min, action_max, range_length=1):
+    '''
+    Denormalizes the action values to the real-world values.
+    action: the normalized action value
+    action_min: minimum value of the action
+    action_max: maximum value of the action
+    '''
+    return (action/range_length)*(action_max-action_min)
 
-def push_along_line_from_action(action, z=0.1, debug=False):
+def go_to_home_position(debug=False):
+    '''
+    Moves the robot to the home position
+    '''
+    try:
+        res = niryo_robot.move_joints(0, 0.5, -1.25, 0, 0, 0)
+        while not res or res[0] != 1:
+            res = niryo_robot.move_joints(0, 0.5, -1.25, 0, 0, 0)
+        if debug:
+            print("Moved to home position")
+    except NiryoRosWrapperException as e:
+        print(f"Error occurred: {e}")
+        niryo_robot.clear_collision_detected()
+        res = niryo_robot.move_joints(0, 0.5, -1.25, 0, 0, 0)
+        if not res or res[0] != 1:
+            print("Error moving to home position")
+
+    return res
+
+def push_along_line_from_action(action, debug=False):
     '''
     Pushes the robot along a line, where the action vector defines the push.
     action: [x, y, theta, length] - the parameters learned by the RL agent.
-    z: constant z-coordinate for pushing
     debug: boolean to print debug statements
     '''
 
-    # real_x_min, real_x_max = 0.173, 0.427
-    # real_y_min, real_y_max = -0.124, 0.124  
-    # real_z_min, real_z_max = 0.0, 0.2  
-
+    # Define the real-world limits for each action dimension
     real_x_min, real_x_max = 0.167, 0.432
-    real_y_min, real_y_max = -0.132, 0.132  
+    real_y_min, real_y_max = -0.132, 0.132
     real_z_min, real_z_max = 0.0, 0.1 
-    real_theta_min, real_theta_max = -180,180
-    real_length_min, real_length_max = 0.0,(0.158*0.6) # *0.6 of workspace  #antipodal paper reference 
 
-    # Normalized action values
-    # Clipping the normalized action values to ensure they are within range
-    norm_x, norm_y, norm_z, norm_theta, norm_length = np.clip(action, [0, -1, 0, -1, 0], [1, 1, 1, 1, 1])
-    print(f'Action normalized: {norm_x,norm_y,norm_z,norm_theta,norm_length}')
+    workspace_length = min(real_x_max - real_x_min, real_y_max - real_y_min)
+
+    real_theta_min, real_theta_max = -180, 180
+    real_length_min, real_length_max = 0.1 * workspace_length, 0.5 * workspace_length  # Limit the min and max length proportional to the workspace length
+    if debug:
+        print(action)
 
     # Denormalize each action dimension
-    x = denormalize_action(norm_x, real_x_min, real_x_max)
-    y = denormalize_action(norm_y, real_y_min, real_y_max)
-    z = denormalize_action(norm_z, real_z_min, real_z_max)
-    theta = denormalize_action(norm_theta, real_theta_min, real_theta_max)
-    theta = np.clip(theta,-180,180)
+    x = denormalize_action(action[0], real_x_min, real_x_max, range_length=2) # Range length = max_action_value - min_action_value
+    y = denormalize_action(action[1], real_y_min, real_y_max, range_length=2)
+    z = denormalize_action(action[2], real_z_min, real_z_max)
+    theta = denormalize_action(action[3], real_theta_min, real_theta_max, range_length=2)
     theta_radians = math.radians(theta)
-    length = denormalize_action(norm_length, real_length_min, real_length_max)
-    print(f'Action denormalized: {x,y,z,theta,length}')
+    length = denormalize_action(action[4], real_length_min, real_length_max)
+    if debug:
+        print(f'Action denormalized: {x,y,z,theta,length}')
+
+
     # Go to home position
-    res = niryo_robot.move_joints(0, 0.5, -1.25, 0, 0, 0)
-    if debug and res and res[0] == 1:
-        print("Moved to home position")
+    res = go_to_home_position()
 
     # Close the gripper
     res = niryo_robot.grasp_with_tool()
@@ -100,72 +113,75 @@ def push_along_line_from_action(action, z=0.1, debug=False):
         print(f"Moved to the final position: final_x={final_x}, final_y={final_y}")
 
     # Return to home position
-    res = niryo_robot.move_joints(0, 0.5, -1.25, 0, 0, 0)
-    if debug:
-        print("Returned to home position")
+    res = go_to_home_position()
 
-    return True
-
-def check_state_values(state):
-    for key, value in state.items():
-        if isinstance(value, np.ndarray):
-            # If the array is non-empty and has truthy values
-            if not np.any(value):
-                rospy.loginfo(f"Array in key '{key}' is falsy or empty.")
-                return False
-        else:
-            # If value is not an array, check it directly
-            if not value:
-                rospy.loginfo(f"Value for key '{key}' is falsy.")
-                return False
     return True
 
 
 # Define the custom Niryo environment
 class NiryoRobotEnv(gym.Env):
     def __init__(self):
+        # Initialize the inherited class
         super(NiryoRobotEnv, self).__init__()
+
+        # Parse the arguments
         self.args = parse_args()
+
+        # Initialize the camera subscriber
         self.cam = ROSCameraSubscriber(
         depth_topic='/camera/depth/image_raw',  
         rgb_topic='/camera/color/image_raw'    
         )
-        self.cam_data = CameraData(include_depth=self.args.use_depth, include_rgb=self.args.use_rgb)
-        # Define image sizes
-        img_height, img_width = 224, 224 
 
-        # gray image: 1 channel, values range from 0 to 255
+        # Initialize the camera data object
+        self.cam_data = CameraData()
+
+        # Define the debug flag. WARNING: Setting to True will print hell lot of debug statements. My system almost ran out of space
+        self.debug = False
+
+        # Define variables for the environment
+        self.episode_count = 0
+        self.max_collisions = 5
+
+        # Define image sizes
+        img_height, img_width = 224, 224
+
+        # gray image: 1 channel, values range from 0 to 255 which is normalised to 0-1
         gray_low = 0
         gray_high = 1
 
-        # Depth image: 1 channel, values range from 0 to 0.5
+        # Depth image: 1 channel, values range from 0.1 to x which is normalised to 0-1
         depth_low = 0
-        depth_high = 1 # TODO check the normalised depth values
+        depth_high = 1
 
         # Mask information: white pixel count (integer), centroid X and Y (floating-point values)
         white_pixel_count_low = 0
         white_pixel_count_high = img_height * img_width  # Maximum possible number of white pixels
 
+        # Mask centroid: X and Y coordinates (floating-point values)
         centroid_low = np.array([0, 0], dtype=np.float32)   # Lower bounds
         centroid_high = np.array([224, 224], dtype=np.float32)
 
         # Observation space initialization
         self.observation_space = spaces.Dict({
             'gray': spaces.Box(low=gray_low, high=gray_high, shape=(img_height, img_width), dtype=np.uint8), #grayscale image
-            'depth': spaces.Box(low=depth_low, high=depth_high, shape=(img_height, img_width,1), dtype=np.float32),
+            'depth': spaces.Box(low=depth_low, high=depth_high, shape=(img_height, img_width), dtype=np.float32),
             'white_pixel_count': spaces.Box(low=white_pixel_count_low, high=white_pixel_count_high, shape=(1,), dtype=np.int32),
             'centroid': spaces.Box(low=centroid_low, high=centroid_high, shape=(2,), dtype=np.float32)  # 2D centroid (X, Y)
         })
 
+        # Initilaise the Model for Graspable
+        self.grasp_model = Graspable(network_path=self.args.network, force_cpu=self.args.force_cpu)
+
         # Define the x, y, and z limits
-        xmin_limit = 0.0
+        xmin_limit = -1.0
         xmax_limit = 1.0
         ymin_limit = -1.0
         ymax_limit = 1.0
         zmin_limit = 0.0
         zmax_limit = 1.0
         thetamin_limit = -1
-        thetamax_limit = 1 # scale it from 0-360
+        thetamax_limit = 1 # scale it from -180 to 180
         lenmin_limit = 0
         lenmax_limit = 1
 
@@ -178,48 +194,40 @@ class NiryoRobotEnv(gym.Env):
         self.action_space = spaces.Box(low=low_limits, high=high_limits,shape = (5,), dtype=np.float32)
 
     def reset(self):
-        print('in reset')
+        if self.debug:
+            print('in reset')
         try:
-            state = spaces.Dict()
-            self.previous_white_pixel_count = 0
-            # Episode tracking variables
-            self.current_episode_reward = 0
-            self.episode_count = 0
-            self.current_step = 0  # Initialize current step
-
+            # Move robot to home position
+            res = go_to_home_position()
             
+            state = spaces.Dict()
+            # Reset the environment variables
+            self.previous_white_pixel_count = 0
             self.done = False
             self.graspable = None
-            # self.centroid = np.array([-1.0, -1.0], dtype=np.float32)
-
-
-            self.current_episode_reward = 0
-            self.current_step = 0 
-
-                #parameters to tak careof collision conditions
-            self.collision_count = 0  
-            self.max_collisions = 5
-
+            self.collision_count = 0
             self.current_pixel_count=0
+
+            # Episode tracking variables
+            self.current_episode_reward = 0
+            self.current_step = 0  # Initialize current step
 
             # Reset the environment and return the initial state
             rospy.wait_for_service('/delete_and_spawn_models')
             reset_simulation = rospy.ServiceProxy('/delete_and_spawn_models', delete_and_spawn_models)
             resp = reset_simulation()
 
-            rospy.sleep(0.3)
-
-            # Return to home position
-            res = niryo_robot.move_joints(0, 0.5, -1.25, 0, 0, 0)
+            rospy.sleep(1)  # Wait for the simulation to reset
             
+            # Get the initial state
             state = self.get_state()
-            while state is None:
+            while state is None:  # Ensure the state is valid
                 state = self.get_state()
                 if state is None:
                     rospy.loginfo("Waiting for valid state...")
             
-           
-        except:
+        except Exception as e:
+            rospy.logwarn(f"Exception occurred: {e}")
             niryo_robot.clear_collision_detected()
             state = self.get_state()
             while state is None:
@@ -229,67 +237,64 @@ class NiryoRobotEnv(gym.Env):
         return state
 
     def get_state(self):
-        print('in state')
+        if self.debug:
+            print('in state')
+    
         # Ensure both color and depth images are available
         image_bundle = self.cam.get_image_bundle()
-        if image_bundle is None or 'rgb' not in image_bundle or 'aligned_depth' not in image_bundle:
+        while (image_bundle is None or 'rgb' not in image_bundle or 'aligned_depth' not in image_bundle):  # Wait for valid images
             rospy.loginfo("Waiting for valid images...")
+            image_bundle = self.cam.get_image_bundle()
+        
+        # Get the RGB and depth images
         rgb = image_bundle['rgb']
         depth = image_bundle['aligned_depth']
-        x,depth_image, denormalised_depth, rgb_img = self.cam_data.get_data(rgb=rgb, depth=depth)
-        obj = Graspable(network_path=self.args.network,force_cpu=False)
-        self.graspable = obj.run_graspable(x,depth_image, denormalised_depth, rgb_img )
-        color_image = self.cam_data.get_rgb(rgb,False) # denormalised rgb image for masking of target object
 
+        # Get the camera data
+        x, depth_image, denormalised_depth, rgb_img = self.cam_data.get_data(rgb=rgb, depth=depth)
 
+        # Check if the target object is graspable
+        self.graspable = self.grasp_model.run_graspable(x, depth_image, denormalised_depth, rgb_img )
 
-        # # Convert to HSV and create mask for blue color
+        # Get the denormalised color image
+        color_image = self.cam_data.get_rgb(rgb, False)
+
+        # Convert to HSV and create mask for blue color
         hsv_image = cv2.cvtColor(color_image, cv2.COLOR_RGB2HSV)
-        # lower_blue = np.array([100, 150, 50])
-        # upper_blue = np.array([140, 255, 255])
-        # mask_image = cv2.inRange(hsv_image, lower_blue, upper_blue)
+        # Color range for shades of red
         lower_red_1 = np.array([0, 120, 70])
         upper_red_1 = np.array([10, 255, 255])
         lower_red_2 = np.array([170, 120, 70])
         upper_red_2 = np.array([180, 255, 255])
 
-        rospy.loginfo(f'New STATE registered')
+        # Create a mask for the red color
         mask1 = cv2.inRange(hsv_image, lower_red_1, upper_red_1)
         mask2 = cv2.inRange(hsv_image, lower_red_2, upper_red_2)
         mask_image = mask1 | mask2
 
         # Calculate the number of white pixels in the mask
         white_pixel_count = cv2.countNonZero(mask_image)
-        print(f'white pixel count {white_pixel_count}')
-        self.current_pixel_count=white_pixel_count
+        if self.debug:
+            print(f'white pixel count {white_pixel_count}')
+        self.current_pixel_count=white_pixel_count  # Update the current white pixel count
 
-        num_labels, labels, stats, centroids = cv2.connectedComponentsWithStats(mask_image)  #another faster approach for centroid calculation in a binary image
+        # Calculate the centroid of the mask
+        num_labels, labels, stats, centroids = cv2.connectedComponentsWithStats(mask_image)
         white_pixel_count = stats[:, cv2.CC_STAT_AREA].sum()  # Total white pixel count
-        # print(f'num_labels{num_labels}')
         self.centroid = centroids[0] if num_labels > 1 else np.array([-1.0, -1.0], dtype=np.float32)  # Handle invalid case
 
-        # # Calculate the centroid of the masked area (if there are white pixels)
-        # M = cv2.moments(mask_image)
-        # if M["m00"] > 0:  # Ensure there are white pixels
-        #     cX = int(M["m10"] / M["m00"])  # X coordinate of the centroid
-        #     cY = int(M["m01"] / M["m00"])  # Y coordinate of the centroid
-        # else:
-        #     cX, cY = -1, -1  # If no white pixels, set centroid to an invalid value
-        # print(f'Centroid{self.centroid}')
-
-        print(f'color image shape{color_image.shape}')
-
+        # Convert the color image to grayscale and normalise
         gray_image = cv2.cvtColor(color_image,cv2.COLOR_RGB2GRAY)
-        gray_image_normalised = cv2.normalize(gray_image, None, 0, 255, cv2.NORM_MINMAX) #normalising the grayscaled normalised rgb image
-            
-        # gray_image_normalised = np.expand_dims(gray_image_normalised, axis=-1)
-        # gray_image_normalised = gray_image_normalised.reshape(224,224,1)
-        
-        # Add an extra dimension to the depth image to match the expected (224, 224, 1) shape
+        gray_image_normalised = cv2.normalize(gray_image, None, 0, 255, cv2.NORM_MINMAX)  # Normalising the grayscaled normalised rgb image
 
-        depth_image = depth_image.transpose((1,2,0))
-        print(f'gray{gray_image_normalised.shape}')
-        print(f'depth{depth_image.shape}')
+        # Normalise the depth image
+        min_abs, max_abs = 10, 100
+        depth_image = np.clip((denormalised_depth - min_abs) / (max_abs - min_abs), 0, 1)
+
+        if self.debug:
+            print(f'gray{gray_image_normalised.shape}')
+            print(f'depth{depth_image.shape}')
+
         # Return the state as a dictionary matching observation space
         state = {
             'gray': gray_image_normalised,
@@ -297,47 +302,48 @@ class NiryoRobotEnv(gym.Env):
             'white_pixel_count': np.array(self.current_pixel_count, dtype=np.int32),# Send number of white pixels and centroid coordinates
             'centroid':np.array(self.centroid,dtype = np.float32)
         }
-        print(f"State: {state}")
+
+        rospy.loginfo('New STATE registered')
+
+        if self.debug:
+            print(f"State: {state}")
         
         return state
 
     def step(self, action):
+        if self.debug:
+            print('in step')
+        
+        # Initialize the state and info
         state = spaces.Dict()
         info = {}
-        # state = self.get_state()
-        # while state is None:
-        #     state = self.get_state()
-        #     if state is None:
-        #         rospy.loginfo("Waiting for valid state...")
-        print('in step')
+
         try:
-            # Increment the current step
+            # Increment the current step and initialize the reward
             self.current_step += 1
-            reward = 0 
-            # After pushing, get new state and compute reward
+            reward = 0
             
+            # Check if the target object is graspable
             if self.graspable == False:
                 # Perform push action using selected action
-                proceed = push_along_line_from_action(action) #put it after reward is computed TODO
+                proceed = push_along_line_from_action(action)
                 rospy.sleep(0.1)
-            state = self.get_state()
-            while state is None:
-                state = self.get_state()
-                if state is None:
-                    rospy.loginfo("Waiting for valid state...")
 
-            reward,self.done = self.compute_reward(state)
+            # Get the new state
+            state = self.get_state()
+
+            # Compute the reward and check if the episode is done
+            reward, self.done = self.compute_reward(state)
+
             # Update current episode reward
             self.current_episode_reward += reward
-        except Exception as e:      # TODO NEGATIVE REWARD FOR COLLISION
+        except Exception as e:
+            # Log the exception and clear the collision detected flag
             rospy.logwarn(f"Exception occurred: {e}")
             niryo_robot.clear_collision_detected()
 
+            # Get the new state
             state = self.get_state()
-            while state is None:
-                state = self.get_state()
-                if state is None:
-                    rospy.loginfo("Waiting for valid state...")
 
             # Penalize for the collision
             self.current_episode_reward -= 20
@@ -363,11 +369,12 @@ class NiryoRobotEnv(gym.Env):
             }
         print(f'Current episode reward : {self.current_episode_reward}')
 
-        return state, self.current_episode_reward,self.done, info
+        return state, self.current_episode_reward, self.done, info
 
 
     def compute_reward(self, state):
-        print('in reward')
+        if self.debug:
+            print('in reward')
         reward = 0.0
         
         # Retrieve the current white pixel count from the state
@@ -375,10 +382,15 @@ class NiryoRobotEnv(gym.Env):
         # print("current:",current_white_pixel_count)
         
         # Check if the target is grasped
-        if self.graspable:
+        if self.graspable and self.current_step == 1:
+            self.done = True
+            rospy.loginfo(f"Ending episode as target object is graspable without taking any action")
+        elif self.graspable and self.current_step != 1:
+            if self.debug:
+                print(f'Current_step:{self.current_step}')
             reward += 10.0
             self.done = True
-            rospy.loginfo(f"Ending episode as target object is graspable")
+            rospy.loginfo(f"Ending episode as target object is graspable after actions taken by niryo")
         else:
             reward += -1.0
             
@@ -414,36 +426,31 @@ class TensorBoardCallback(BaseCallback):
 
 # Initialize the ROS environment and SAC model
 if __name__ == "__main__":
-   # Connecting to the ROS Wrapper & calibrating if needed
-    niryo_robot = NiryoRosWrapper()
-    # niryo_robot.calibrate_auto()
-
-    # Update tool
-    niryo_robot.update_tool()
-
-    
-
     # Initialize ROS node
     rospy.init_node('niryo_rl_node', anonymous=True)
 
-    # Return to home position
-    res = niryo_robot.move_joints(0, 0.5, -1.25, 0, 0, 0)
+    # Connecting to the ROS Wrapper & calibrating if needed
+    niryo_robot = NiryoRosWrapper()
+    niryo_robot.calibrate_auto()
+
+    # Update tool
+    niryo_robot.update_tool()
 
     # Create an environment instance
     env = DummyVecEnv([lambda: NiryoRobotEnv()])
 
     # Set up SAC model with a specified buffer size
-    model = SAC("MultiInputPolicy", env, verbose=1, buffer_size=5000)  # Set buffer size here
+    model = SAC("MultiInputPolicy", env, verbose=1, buffer_size=100)  # Set buffer size here
 
     # Set up a checkpoint callback to save the model periodically
-    checkpoint_callback = CheckpointCallback(save_freq=1000, save_path='./logs/',
+    checkpoint_callback = CheckpointCallback(save_freq=10, save_path='./logs/',
                                             name_prefix='niryo_sac_model')
 
     # Set up a TensorBoard callback
     tensorboard_callback = TensorBoardCallback(log_dir='./logs/tensorboard/')
    
     # Train the model with the callbacks
-    model.learn(total_timesteps=100000, callback=[checkpoint_callback, tensorboard_callback])
+    model.learn(total_timesteps=10000, callback=[checkpoint_callback, tensorboard_callback])
 
     # Save the trained model
     model.save("niryo_sac_model")
