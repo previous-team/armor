@@ -32,15 +32,17 @@ def parse_args():
     args = parser.parse_args()
     return args
 
-
-def denormalize_action(action, action_min, action_max, range_length=1):
+def denormalize_action(action, action_min, action_max, normalized_min=0):
     '''
     Denormalizes the action values to the real-world values.
     action: the normalized action value
     action_min: minimum value of the action
     action_max: maximum value of the action
     '''
-    return (action/range_length)*(action_max-action_min)
+    if normalized_min == -1:
+        return action_min + 0.5 * (action_max - action_min) * (1 + action)
+    else:
+        return action_min + (action_max - action_min) * action
 
 def go_to_home_position(debug=False):
     '''
@@ -81,10 +83,10 @@ def push_along_line_from_action(action, debug=False):
         print(action)
 
     # Denormalize each action dimension
-    x = denormalize_action(action[0], real_x_min, real_x_max, range_length=2) # Range length = max_action_value - min_action_value
-    y = denormalize_action(action[1], real_y_min, real_y_max, range_length=2)
+    x = denormalize_action(action[0], real_x_min, real_x_max, normalized_min=-1) # Range length = max_action_value - min_action_value
+    y = denormalize_action(action[1], real_y_min, real_y_max, normalized_min=-1)
     z = denormalize_action(action[2], real_z_min, real_z_max)
-    theta = denormalize_action(action[3], real_theta_min, real_theta_max, range_length=2)
+    theta = denormalize_action(action[3], real_theta_min, real_theta_max, normalized_min=-1)
     theta_radians = math.radians(theta)
     length = denormalize_action(action[4], real_length_min, real_length_max)
     if debug:
@@ -141,7 +143,7 @@ class NiryoRobotEnv(gym.Env):
 
         # Define variables for the environment
         self.episode_count = 0
-        self.max_collisions = 5
+        self.max_episode_steps = 100
 
         # Define image sizes
         img_height, img_width = 224, 224
@@ -221,19 +223,11 @@ class NiryoRobotEnv(gym.Env):
             
             # Get the initial state
             state = self.get_state()
-            while state is None:  # Ensure the state is valid
-                state = self.get_state()
-                if state is None:
-                    rospy.loginfo("Waiting for valid state...")
             
         except Exception as e:
             rospy.logwarn(f"Exception occurred: {e}")
             niryo_robot.clear_collision_detected()
             state = self.get_state()
-            while state is None:
-                state = self.get_state()
-                if state is None:
-                    rospy.loginfo("Waiting for valid state...")
         return state
 
     def get_state(self):
@@ -290,6 +284,7 @@ class NiryoRobotEnv(gym.Env):
         # Normalise the depth image
         min_abs, max_abs = 10, 100
         depth_image = np.clip((denormalised_depth - min_abs) / (max_abs - min_abs), 0, 1)
+        depth_image = depth_image.squeeze()
 
         if self.debug:
             print(f'gray{gray_image_normalised.shape}')
@@ -318,45 +313,37 @@ class NiryoRobotEnv(gym.Env):
         state = spaces.Dict()
         info = {}
 
+        # Increment the current step and initialize the reward
+        self.current_step += 1
+        reward = 0
+
         try:
-            # Increment the current step and initialize the reward
-            self.current_step += 1
-            reward = 0
-            
             # Check if the target object is graspable
             if self.graspable == False:
                 # Perform push action using selected action
                 proceed = push_along_line_from_action(action)
                 rospy.sleep(0.1)
 
-            # Get the new state
-            state = self.get_state()
-
-            # Compute the reward and check if the episode is done
-            reward, self.done = self.compute_reward(state)
-
-            # Update current episode reward
-            self.current_episode_reward += reward
         except Exception as e:
             # Log the exception and clear the collision detected flag
             rospy.logwarn(f"Exception occurred: {e}")
             niryo_robot.clear_collision_detected()
 
+            # Penalize for the collision
+            reward -= 2
+        
+        finally:
             # Get the new state
             state = self.get_state()
 
-            # Penalize for the collision
-            self.current_episode_reward -= 20
-            self.collision_count += 1
+            # Compute the reward and check if the episode is done
+            computed_reward, self.done = self.compute_reward(state)
 
-            # Check if the number of collisions exceeds the maximum allowed
-            if self.collision_count >= self.max_collisions:
-                self.done = True
-                rospy.logwarn(f"Maximum collision limit reached ({self.max_collisions}). Ending episode.")
-            else:
-                self.done = False  # continue even after collision
+            # Update the reward
+            reward += computed_reward
 
-            print(f"Collision detected. Total collisions: {self.collision_count}")
+            # Update current episode reward
+            self.current_episode_reward += reward
 
         
         # Handle episode completion
@@ -379,27 +366,32 @@ class NiryoRobotEnv(gym.Env):
         
         # Retrieve the current white pixel count from the state
         current_white_pixel_count = self.current_pixel_count
-        # print("current:",current_white_pixel_count)
-        
-        # Check if the target is grasped
-        if self.graspable and self.current_step == 1:
-            self.done = True
-            rospy.loginfo(f"Ending episode as target object is graspable without taking any action")
-        elif self.graspable and self.current_step != 1:
-            if self.debug:
-                print(f'Current_step:{self.current_step}')
-            reward += 10.0
-            self.done = True
-            rospy.loginfo(f"Ending episode as target object is graspable after actions taken by niryo")
+        if self.debug:
+            print("Current_white_pixel_count:",current_white_pixel_count)
+
+        # Check if it is the first step
+        if self.current_step == 1:
+            # Check if the target object is graspable
+            if self.graspable:
+                self.done = True
+                rospy.loginfo(f"Ending episode as target object is graspable without taking any action")
         else:
-            reward += -1.0
-            
-    
-        # Reward for increasing white pixel count
-        if current_white_pixel_count != self.previous_white_pixel_count:
-            reward += (current_white_pixel_count - self.previous_white_pixel_count)/100.0  # You can adjust the reward value as needed # TODO CHANGE REWARD
-        else:
-            reward += -1.0 #just for avoiding taking action that dont really help increase graspability of target object
+            # Check if the target object is graspable
+            if self.graspable:
+                reward += 10.0
+                self.done = True
+                rospy.loginfo(f"Ending episode as target object is graspable after actions taken by the bot")
+            else:
+                # Check if the episode has reached the maximum steps
+                if self.current_step >= self.max_episode_steps:
+                    reward += -5.0
+                    self.done = True
+                    rospy.loginfo("Ending episode as maximum steps reached")
+                # Reward for increasing white pixel count
+                elif current_white_pixel_count > self.previous_white_pixel_count:
+                    reward += 2.0
+                elif current_white_pixel_count <= self.previous_white_pixel_count:
+                    reward += -2.0
 
         # Update the previous white pixel count for the next call
         self.previous_white_pixel_count = current_white_pixel_count
@@ -440,7 +432,7 @@ if __name__ == "__main__":
     env = DummyVecEnv([lambda: NiryoRobotEnv()])
 
     # Set up SAC model with a specified buffer size
-    model = SAC("MultiInputPolicy", env, verbose=1, buffer_size=100)  # Set buffer size here
+    model = SAC("MultiInputPolicy", env, verbose=1, buffer_size=20)  # Set buffer size here
 
     # Set up a checkpoint callback to save the model periodically
     checkpoint_callback = CheckpointCallback(save_freq=10, save_path='./logs/',
@@ -450,16 +442,10 @@ if __name__ == "__main__":
     tensorboard_callback = TensorBoardCallback(log_dir='./logs/tensorboard/')
    
     # Train the model with the callbacks
-    model.learn(total_timesteps=10000, callback=[checkpoint_callback, tensorboard_callback])
+    total_timesteps = 100
+    model.learn(total_timesteps=total_timesteps, callback=[checkpoint_callback, tensorboard_callback])
 
     # Save the trained model
     model.save("niryo_sac_model")
-    print("Congratulations!!!!! Training done, live long and prosper ;)")
-    # done = True
-    # # After training, you can evaluate or use the trained model:
-    # obs = env.reset()
-    # for _ in range(1000):
-    #     action, _states = model.predict(obs)
-    #     obs, reward, done, info = env.step(action)
-    #     if done:
-    #         obs = env.reset()
+    print(f"Training completed for {total_timesteps} time steps")
+    
