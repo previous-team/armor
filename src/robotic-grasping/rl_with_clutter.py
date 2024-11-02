@@ -13,7 +13,7 @@ from stable_baselines3 import SAC
 from stable_baselines3.common.buffers import ReplayBuffer
 from stable_baselines3.common.vec_env import DummyVecEnv
 from stable_baselines3.common.callbacks import CheckpointCallback, BaseCallback
-
+from stable_baselines3.common.callbacks import CallbackList
 from hardware.cam_gazebo import ROSCameraSubscriber
 from utils.data.camera_data_gazebo import CameraData
 from run_rl_ml import Graspable
@@ -23,6 +23,9 @@ import gym
 from gym import spaces
 from std_srvs.srv import Empty
 from torch.utils.tensorboard import SummaryWriter
+
+import os
+os.environ['CUDA_LAUNCH_BLOCKING'] = '1'
 
 def parse_args():
     parser = argparse.ArgumentParser(description='Evaluate network')
@@ -93,9 +96,9 @@ def push_along_line_from_action(action, z=0.1, debug=False):
 
     # Denormalize each action dimension
     x = denormalize_action(norm_x, real_x_min, real_x_max)
-    y = denormalize_action(norm_y, real_y_min, real_y_max,-1)
+    y = denormalize_action(norm_y, real_y_min, real_y_max)
     z = denormalize_action(norm_z, real_z_min, real_z_max)
-    theta = denormalize_action(norm_theta, real_theta_min, real_theta_max,-1)
+    theta = denormalize_action(norm_theta, real_theta_min, real_theta_max)
     # theta = np.clip(theta,-180,180)
     theta_radians = math.radians(theta)
     length = denormalize_action(norm_length, real_length_min, real_length_max)
@@ -248,15 +251,15 @@ class NiryoRobotEnv(gym.Env):
             'white_pixel_count': spaces.Box(low=white_pixel_count_low, high=white_pixel_count_high, shape=(1,), dtype=np.int32),
             'centroid': spaces.Box(low=centroid_low, high=centroid_high, shape=(2,), dtype=np.float32)  # 2D centroid (X, Y)
         })
-
+        print(torch.cuda.is_available())
         # Define the x, y, and z limits
         xmin_limit = 0.0
         xmax_limit = 1.0
-        ymin_limit = -1.0
+        ymin_limit = 0.0
         ymax_limit = 1.0
         zmin_limit = 0.0
         zmax_limit = 1.0
-        thetamin_limit = -1
+        thetamin_limit = 0.0
         thetamax_limit = 1 # scale it from 0-360
         lenmin_limit = 0
         lenmax_limit = 1
@@ -550,7 +553,6 @@ if __name__ == "__main__":
     # Update tool
     niryo_robot.update_tool()
 
-    
 
     # Initialize ROS node
     rospy.init_node('niryo_rl_node', anonymous=True)
@@ -562,7 +564,7 @@ if __name__ == "__main__":
     env = DummyVecEnv([lambda: NiryoRobotEnv()])
 
     # Set up SAC model with a specified buffer size
-    model = SAC("MultiInputPolicy", env, verbose=1, buffer_size=10000)  # Set buffer size here
+    model = SAC("MultiInputPolicy", env, verbose=1, buffer_size=10000,device="cuda")  # Set buffer size here
 
     # Set up a checkpoint callback to save the model periodically
     checkpoint_callback = CheckpointCallback(save_freq=1000, save_path='./logs/',
@@ -572,7 +574,7 @@ if __name__ == "__main__":
     tensorboard_callback = TensorBoardCallback(log_dir='./logs/tensorboard/')
    
     # Train the model with the callbacks
-    model.learn(total_timesteps=50000, callback=[checkpoint_callback, tensorboard_callback])
+    model.learn(total_timesteps=50000, callback = CallbackList([checkpoint_callback, tensorboard_callback]))
 
     # Save the trained model
     model.save("niryo_sac_model")
