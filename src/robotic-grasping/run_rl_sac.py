@@ -111,6 +111,10 @@ def push_along_line_from_action(action, debug=False):
     # Calculate the final position based on the length and theta
     final_x, final_y = x + length * math.cos(theta_radians), y + length * math.sin(theta_radians)
     res = niryo_robot.move_pose(final_x, final_y, max(z + 0.07, 0.1), 0.0, 1.57, 0)
+    if res[0] != 1:
+        if debug:
+            print("Error moving to the final position")
+        raise NiryoRosWrapperException("Error moving to the final position")
     if debug:
         print(f"Moved to the final position: final_x={final_x}, final_y={final_y}")
 
@@ -352,7 +356,7 @@ class NiryoRobotEnv(gym.Env):
             niryo_robot.clear_collision_detected()
 
             # Penalize for the collision
-            reward -= 2
+            reward -= 5
         
         finally:
             # Get the new state
