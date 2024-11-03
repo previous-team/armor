@@ -45,7 +45,11 @@ models = [
     {"sdf_file": f"{package_path}/models/cube_blue/model.sdf", "model_name": "cube_blue_spawned3"},
     {"sdf_file": f"{package_path}/models/cube_blue/model.sdf", "model_name": "cube_blue_spawned4"},
     {"sdf_file": f"{package_path}/models/cuboid_green/model.sdf", "model_name": "cuboid_green_spawned4"},
-    {"sdf_file": f"{package_path}/models/cuboid_blue/model.sdf", "model_name": "cuboid_blue_spawned4"}
+    {"sdf_file": f"{package_path}/models/cuboid_blue/model.sdf", "model_name": "cuboid_blue_spawned4"},
+    {"sdf_file": f"{package_path}/models/cube_blue/model.sdf", "model_name": "cube_blue_spawned5"},
+    {"sdf_file": f"{package_path}/models/cube_blue/model.sdf", "model_name": "cube_blue_spawned6"},
+    {"sdf_file": f"{package_path}/models/cuboid_green/model.sdf", "model_name": "cuboid_green_spawned5"},
+    {"sdf_file": f"{package_path}/models/cuboid_blue/model.sdf", "model_name": "cuboid_blue_spawned5"}
 ]
 
 # Function to spawn a model
