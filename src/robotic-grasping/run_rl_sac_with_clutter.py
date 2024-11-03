@@ -228,7 +228,7 @@ class NiryoRobotEnv(gym.Env):
         self.current_step = 0  # Initialize current step
 
         # Define the maximum number of steps per episode
-        self.max_episode_steps = 100
+        self.max_episode_steps = 30
 
         # Define radius for local clutter density calculation
         self.local_clutter_radius = 30  # Adjust this value as needed(in pixels)
@@ -523,22 +523,22 @@ class NiryoRobotEnv(gym.Env):
         print(f'Reward:  {reward} , Done:  {self.done}')
         return reward, self.done
 
-class TensorBoardCallback(BaseCallback):
-    def __init__(self, log_dir: str):
-        super(TensorBoardCallback, self).__init__()
-        self.log_dir = log_dir
-        self.writer = SummaryWriter(log_dir)
+# class TensorBoardCallback(BaseCallback):
+#     def __init__(self, log_dir: str):
+#         super(TensorBoardCallback, self).__init__()
+#         self.log_dir = log_dir
+#         self.writer = SummaryWriter(log_dir)
 
-    def _on_step(self) -> bool:
-        # Log episode rewards and lengths
-        if 'episode' in self.locals:
-            episode = self.locals['episode']
-            self.writer.add_scalar("episode/reward", episode['r'], self.num_timesteps)
-            self.writer.add_scalar("episode/length", episode['l'], self.num_timesteps)
-        return True
+#     def _on_step(self) -> bool:
+#         # Log episode rewards and lengths
+#         if 'episode' in self.locals:
+#             episode = self.locals['episode']
+#             self.writer.add_scalar("episode/reward", episode['r'], self.num_timesteps)
+#             self.writer.add_scalar("episode/length", episode['l'], self.num_timesteps)
+#         return True
 
-    def _on_training_end(self) -> None:
-        self.writer.close()
+#     def _on_training_end(self) -> None:
+#         self.writer.close()
     
 
 # Initialize the ROS environment and SAC model
@@ -556,18 +556,21 @@ if __name__ == "__main__":
     # Create an environment instance
     env = DummyVecEnv([lambda: NiryoRobotEnv()])
 
+    logdir = "logs"
     # Set up SAC model with a specified buffer size
-    model = SAC("MultiInputPolicy", env, verbose=1, buffer_size=5000)  # Set buffer size here
+    model = SAC("MultiInputPolicy", env, verbose=1, buffer_size=5000, tensorboard_log=logdir)  # Set buffer size here
 
     # Set up a checkpoint callback to save the model periodically
     checkpoint_callback = CheckpointCallback(save_freq=5000, save_path='./logs/', name_prefix='niryo_sac_model')
 
     # Set up a TensorBoard callback
-    tensorboard_callback = TensorBoardCallback(log_dir='./logs/tensorboard/')
+    #tensorboard_callback = TensorBoardCallback(log_dir='./logs/tensorboard/')
    
     # Train the model with the callbacks
-    total_timesteps = 100000
-    model.learn(total_timesteps=total_timesteps, callback=[checkpoint_callback, tensorboard_callback])
+    total_timesteps = 20000
+    #model.learn(total_timesteps=total_timesteps, callback=[checkpoint_callback, tensorboard_callback])
+    
+    model.learn(total_timesteps=total_timesteps, progress_bar=True, tb_log_name="SAC",callback=checkpoint_callback)
 
     # Save the trained model
     model.save("niryo_sac_model")
