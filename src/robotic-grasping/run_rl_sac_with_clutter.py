@@ -312,6 +312,16 @@ class NiryoRobotEnv(gym.Env):
             reset_simulation = rospy.ServiceProxy('/delete_and_spawn_models', delete_and_spawn_models)
             resp = reset_simulation()
 
+            # Check of the target object is graspable
+            state = self.get_state()
+            
+            # If the target object is graspable, reset the simulation
+            while self.graspable:
+                rospy.loginfo("Resetting simulation as target object is graspable")
+                resp = reset_simulation()
+
+                state = self.get_state()
+
             rospy.sleep(1)  # Wait for the simulation to reset
             
             # Get the initial state
@@ -476,43 +486,35 @@ class NiryoRobotEnv(gym.Env):
         if self.debug:
             print("Current_white_pixel_count:", self.current_white_pixel_count)
 
-        # Check if it is the first step
-        if self.current_step == 1:
-            # Check if the target object is graspable
-            if self.graspable:
-                self.done = True
-                rospy.loginfo(f"Ending episode as target object is graspable without taking any action")
-        else:
-            # Check if the target object is graspable
-            if self.graspable:
-                reward += 10.0
-                self.done = True
-                rospy.loginfo(f"Ending episode as target object is graspable after actions taken by the bot")
+        # Check if the target object is graspable
+        if self.graspable:
+            reward += 10.0
+            self.done = True
+            rospy.loginfo(f"Ending episode as target object is graspable after actions taken by the bot")
+        # Check if the episode has reached the maximum steps
+        elif self.current_step >= self.max_episode_steps:
+            reward += -5.0
+            self.done = True
+            rospy.loginfo("Ending episode as maximum steps reached")
+        # Reward for varying white pixel count or clutter density if timestep > 1
+        elif self.current_step > 1:
+            # Reward for increasing white pixel count
+            if self.current_white_pixel_count > self.previous_white_pixel_count:
+                reward += 2.0
+            elif self.current_white_pixel_count <= self.previous_white_pixel_count:
+                reward += -2.0
+
+            # Reward for varying clutter density
+            if self.current_white_pixel_count == 0:
+                if self.previous_global_clutter_density and (self.current_global_clutter_density > self.previous_global_clutter_density):
+                    reward += 3.0
+                elif self.previous_global_clutter_density and (self.current_global_clutter_density < self.previous_global_clutter_density):
+                    reward += -3.0
             else:
-                # Check if the episode has reached the maximum steps
-                if self.current_step >= self.max_episode_steps:
-                    reward += -5.0
-                    self.done = True
-                    rospy.loginfo("Ending episode as maximum steps reached")
-                else:
-                    # Reward for increasing white pixel count
-                    if self.current_white_pixel_count > self.previous_white_pixel_count:
-                        reward += 2.0
-                    elif self.current_white_pixel_count <= self.previous_white_pixel_count:
-                        reward += -2.0
-
-                    # Reward for varying clutter density
-                    if self.current_white_pixel_count == 0:
-                        if self.previous_global_clutter_density and (self.current_global_clutter_density > self.previous_global_clutter_density):
-                            reward += 3.0
-                        elif self.previous_global_clutter_density and (self.current_global_clutter_density < self.previous_global_clutter_density):
-                            reward += -3.0
-                    else:
-                        if self.previous_local_clutter_density and (self.current_local_clutter_density > self.previous_local_clutter_density):
-                            reward += 3.0
-                        elif self.previous_local_clutter_density and (self.current_local_clutter_density < self.previous_local_clutter_density):
-                            reward += -3.0
-
+                if self.previous_local_clutter_density and (self.current_local_clutter_density > self.previous_local_clutter_density):
+                    reward += 3.0
+                elif self.previous_local_clutter_density and (self.current_local_clutter_density < self.previous_local_clutter_density):
+                    reward += -3.0
 
         print(f'Reward:  {reward} , Done:  {self.done}')
         return reward, self.done
