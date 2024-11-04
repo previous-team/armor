@@ -9,6 +9,7 @@ from stable_baselines3 import SAC
 from stable_baselines3.common.buffers import ReplayBuffer
 from stable_baselines3.common.vec_env import DummyVecEnv
 from stable_baselines3.common.callbacks import CheckpointCallback, BaseCallback
+from stable_baselines3.common.monitor import Monitor
 
 from hardware.cam_gazebo import ROSCameraSubscriber
 from utils.data.camera_data_gazebo import CameraData
@@ -18,6 +19,9 @@ from armor.srv import delete_and_spawn_models
 import gym
 from gym import spaces
 from torch.utils.tensorboard import SummaryWriter
+
+# import os
+# os.environ['CUDA_LAUNCH_BLOCKING'] = '1'
 
 def parse_args():
     '''
@@ -83,10 +87,10 @@ def push_along_line_from_action(action, debug=False):
         print(action)
 
     # Denormalize each action dimension
-    x = denormalize_action(action[0], real_x_min, real_x_max, normalized_min=-1) # Range length = max_action_value - min_action_value
-    y = denormalize_action(action[1], real_y_min, real_y_max, normalized_min=-1)
+    x = denormalize_action(action[0], real_x_min, real_x_max) # Range length = max_action_value - min_action_value
+    y = denormalize_action(action[1], real_y_min, real_y_max)
     z = denormalize_action(action[2], real_z_min, real_z_max)
-    theta = denormalize_action(action[3], real_theta_min, real_theta_max, normalized_min=-1)
+    theta = denormalize_action(action[3], real_theta_min, real_theta_max)
     theta_radians = math.radians(theta)
     length = denormalize_action(action[4], real_length_min, real_length_max)
     if debug:
@@ -187,6 +191,13 @@ def calculate_pixel_clutter_density(rgb_image, depth_image):
     # Normalize the clutter density map
     clutter_density_normalized = clutter_density_map / 500
     
+    
+    total_density = np.sum(clutter_density_normalized)
+    # print(" total_density:", total_density)
+    if total_density == 0:   ##to tackle if the total_density sum comes 0
+        clutter_density_normalized = calculate_pixel_clutter_density(rgb_image, depth_image)
+
+    
     return clutter_density_normalized
 
 
@@ -228,7 +239,7 @@ class NiryoRobotEnv(gym.Env):
         self.current_step = 0  # Initialize current step
 
         # Define the maximum number of steps per episode
-        self.max_episode_steps = 30
+        self.max_episode_steps = 50
 
         # Define radius for local clutter density calculation
         self.local_clutter_radius = 30  # Adjust this value as needed(in pixels)
@@ -269,13 +280,13 @@ class NiryoRobotEnv(gym.Env):
         self.grasp_model = Graspable(network_path=self.args.network, force_cpu=self.args.force_cpu)
 
         # Define the x, y, and z limits
-        xmin_limit = -1.0
+        xmin_limit = 0.0
         xmax_limit = 1.0
-        ymin_limit = -1.0
+        ymin_limit = 0.0
         ymax_limit = 1.0
         zmin_limit = 0.0
         zmax_limit = 1.0
-        thetamin_limit = -1
+        thetamin_limit = 0
         thetamax_limit = 1 # scale it from -180 to 180
         lenmin_limit = 0
         lenmax_limit = 1
@@ -287,6 +298,8 @@ class NiryoRobotEnv(gym.Env):
         high_limits = np.array([xmax_limit, ymax_limit, zmax_limit, thetamax_limit, lenmax_limit])
 
         self.action_space = spaces.Box(low=low_limits, high=high_limits,shape = (5,), dtype=np.float32)
+        
+        self.log_file = open('episode.txt', 'a')
 
     def reset(self):
         if self.debug:
@@ -403,12 +416,12 @@ class NiryoRobotEnv(gym.Env):
 
         # Calculate the global clutter density
         self.previous_global_clutter_density = self.current_global_clutter_density
-        self.current_global_clutter_density = np.mean(self.clutter_map)
+        self.current_global_clutter_density = np.sum(self.clutter_map) # changed from mean to sum
 
         # Calculate the local clutter density
         if self.centroid[0] != -1.0 and self.centroid[1] != -1.0:
             self.previous_local_clutter_density = self.current_local_clutter_density
-            self.current_local_clutter_density = np.mean(self.clutter_map[
+            self.current_local_clutter_density = np.sum(self.clutter_map[
                 min(max(0, int(self.centroid[1] - self.local_clutter_radius)), 224):min(max(0, int(self.centroid[1] + self.local_clutter_radius)), 224), 
                 min(max(0, int(self.centroid[0] - self.local_clutter_radius)), 224):min(max(0, int(self.centroid[0] + self.local_clutter_radius)), 224)])
 
@@ -453,7 +466,7 @@ class NiryoRobotEnv(gym.Env):
             niryo_robot.clear_collision_detected()
 
             # Penalize for the collision
-            reward -= 5
+            reward -= 2 #changed from 5 to 2
         
         finally:
             # Get the new state
@@ -473,6 +486,8 @@ class NiryoRobotEnv(gym.Env):
         if self.done:
             self.episode_count += 1
             # Log episode reward to info for callback
+            self.log_file.write(f'{self.episode_count}: Epsiode reward: {self.current_episode_reward} , No of timestep in the episode: {self.current_step} \n')
+            self.log_file.flush()  # Flush to ensure the data is written immediately
             info['episode'] = {
                 'r': self.current_episode_reward,
                 'l': self.current_step  # or use the total steps taken in the episode
@@ -555,6 +570,7 @@ if __name__ == "__main__":
 
     # Create an environment instance
     env = DummyVecEnv([lambda: NiryoRobotEnv()])
+    # env = Monitor(env, filename=None, allow_early_resets=True)
 
     logdir = "logs"
     # Set up SAC model with a specified buffer size
@@ -564,7 +580,7 @@ if __name__ == "__main__":
     checkpoint_callback = CheckpointCallback(save_freq=5000, save_path='./logs/', name_prefix='niryo_sac_model')
 
     # Set up a TensorBoard callback
-    #tensorboard_callback = TensorBoardCallback(log_dir='./logs/tensorboard/')
+    # tensorboard_callback = TensorBoardCallback(log_dir='./logs/tensorboard/')
    
     # Train the model with the callbacks
     total_timesteps = 20000
