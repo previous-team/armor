@@ -36,17 +36,14 @@ def parse_args():
     args = parser.parse_args()
     return args
 
-def denormalize_action(action, action_min, action_max, normalized_min=0):
+def denormalize_action(action, action_min, action_max):
     '''
     Denormalizes the action values to the real-world values.
     action: the normalized action value
     action_min: minimum value of the action
     action_max: maximum value of the action
     '''
-    if normalized_min == -1:
-        return action_min + 0.5 * (action_max - action_min) * (1 + action)
-    else:
-        return action_min + (action_max - action_min) * action
+    return action_min + (action_max - action_min) * action
 
 def go_to_home_position(debug=False):
     '''
@@ -77,9 +74,9 @@ def push_along_line_from_action(action, debug=False):
     # Define the real-world limits for each action dimension
     real_x_min, real_x_max = 0.167, 0.432
     real_y_min, real_y_max = -0.132, 0.132
-    real_z_min, real_z_max = 0.0, 0.05 
+    real_z_min, real_z_max = 0.0, 0.05 # was 0.1 originally 
 
-    workspace_length = min(real_x_max - real_x_min, real_y_max - real_y_min)
+    workspace_length = max(real_x_max - real_x_min, real_y_max - real_y_min)
 
     real_theta_min, real_theta_max = -180, 180
     real_length_min, real_length_max = 0.1 * workspace_length, 0.5 * workspace_length  # Limit the min and max length proportional to the workspace length
@@ -98,7 +95,9 @@ def push_along_line_from_action(action, debug=False):
 
 
     # Go to home position
-    res = go_to_home_position()
+    res = niryo_robot.move_joints(0, 0.5, -1.25, 0, 0, 0)
+    if debug and res and res[0] == 1:
+        print("Moved to home position")
 
     # Close the gripper
     res = niryo_robot.grasp_with_tool()
@@ -115,26 +114,25 @@ def push_along_line_from_action(action, debug=False):
     # Calculate the final position based on the length and theta
     final_x, final_y = x + length * math.cos(theta_radians), y + length * math.sin(theta_radians)
     res = niryo_robot.move_pose(final_x, final_y, max(z + 0.07, 0.1), 0.0, 1.57, 0)
-    if res[0] != 1:
-        if debug:
-            print("Error moving to the final position")
-        raise NiryoRosWrapperException("Error moving to the final position")
+    
     if debug:
         print(f"Moved to the final position: final_x={final_x}, final_y={final_y}")
 
     # Return to home position
-    res = go_to_home_position()
-
+    res = niryo_robot.move_joints(0, 0.5, -1.25, 0, 0, 0)
+    if debug:
+        print("Returned to home position")
+        
     return True
 
-def calculate_pixel_clutter_density(rgb_image, depth_image):
+def calculate_pixel_clutter_density(rgb_image):
     '''
     Calculates the pixel clutter density in the image.
     rgb_image: the RGB image
     depth_image: the depth image
     '''
     # Check if the images are valid
-    if rgb_image is None or depth_image is None:
+    if rgb_image is None:
         return None
         
     # Convert the RGB image to grayscale and apply edge detection
@@ -159,15 +157,11 @@ def calculate_pixel_clutter_density(rgb_image, depth_image):
 
         centroid = (x + w // 2, y + h // 2)
 
-        # Find the corresponding depth of the object by averaging depth pixels within the bounding box
-        depth_region = depth_image[y:y+h, x:x+w]
-        avg_depth = np.mean(depth_region)
-
         # Calculate object size (approximated by bounding box area)
         object_size = w * h
             
         # Append object position and depth
-        objects.append((centroid, avg_depth, object_size))
+        objects.append((centroid,object_size))
         
     # Initialize clutter density map
     clutter_density_map = np.zeros_like(gray, dtype=np.float32)
@@ -195,7 +189,7 @@ def calculate_pixel_clutter_density(rgb_image, depth_image):
     total_density = np.sum(clutter_density_normalized)
     # print(" total_density:", total_density)
     if total_density == 0:   ##to tackle if the total_density sum comes 0
-        clutter_density_normalized = calculate_pixel_clutter_density(rgb_image, depth_image)
+        clutter_density_normalized = calculate_pixel_clutter_density(rgb_image)
 
     
     return clutter_density_normalized
@@ -239,7 +233,7 @@ class NiryoRobotEnv(gym.Env):
         self.current_step = 0  # Initialize current step
 
         # Define the maximum number of steps per episode
-        self.max_episode_steps = 30
+        self.max_episode_steps = 40
 
         # Define radius for local clutter density calculation
         self.local_clutter_radius = 30  # Adjust this value as needed(in pixels)
@@ -300,12 +294,15 @@ class NiryoRobotEnv(gym.Env):
         
         self.log_file = open('episode.txt', 'a')
 
+        #RL tuning params
+        # self.normalize_images = False # TODO
+
     def reset(self):
         if self.debug:
             print('in reset')
         try:
-            # Move robot to home position
-            res = go_to_home_position()
+            # Return to home position
+            res = niryo_robot.move_joints(0, 0.5, -1.25, 0, 0, 0)
             
             state = spaces.Dict()
             # Reset the environment variables
@@ -397,6 +394,9 @@ class NiryoRobotEnv(gym.Env):
         white_pixel_count = stats[:, cv2.CC_STAT_AREA].sum()  # Total white pixel count
         self.centroid = centroids[0] if num_labels > 1 else np.array([-1.0, -1.0], dtype=np.float32)  # Handle invalid case
 
+        if self.debug:
+           print(f'Centroid::{self.centroid}')
+
         # Convert the color image to grayscale and normalise
         gray_image = cv2.cvtColor(color_image,cv2.COLOR_RGB2GRAY)
         gray_image_normalised = cv2.normalize(gray_image, None, 0, 255, cv2.NORM_MINMAX)  # Normalising the grayscaled normalised rgb image
@@ -411,7 +411,7 @@ class NiryoRobotEnv(gym.Env):
             print(f'depth{depth_image.shape}')
 
         # Calculate the pixel clutter density
-        self.clutter_map = calculate_pixel_clutter_density(color_image, depth_image)
+        self.clutter_map = calculate_pixel_clutter_density(color_image)
 
         # Calculate the global clutter density
         self.previous_global_clutter_density = self.current_global_clutter_density
@@ -492,7 +492,7 @@ class NiryoRobotEnv(gym.Env):
             }
         print(f'Current episode reward : {self.current_episode_reward}')
 
-        return state, self.current_episode_reward, self.done, info
+        return state,reward, self.done, info
 
 
     def compute_reward(self, state):
@@ -505,15 +505,16 @@ class NiryoRobotEnv(gym.Env):
 
         # Check if the target object is graspable
         if self.graspable:
-            reward += 10.0
+            reward += 15.0
             self.done = True
             rospy.loginfo(f"Ending episode as target object is graspable after actions taken by the bot")
         # Check if the episode has reached the maximum steps
         elif self.current_step >= self.max_episode_steps:
+            # reward -= 5.0
             self.done = True
             rospy.loginfo("Ending episode as maximum steps reached")
         # Reward for varying white pixel count or clutter density if timestep > 1
-        elif self.current_step > 1:
+        if self.current_step > 1:
             # Reward for increasing white pixel count
             if self.current_white_pixel_count > self.previous_white_pixel_count:
                 reward += 2.0
@@ -534,23 +535,6 @@ class NiryoRobotEnv(gym.Env):
 
         print(f'Reward:  {reward} , Done:  {self.done}')
         return reward, self.done
-
-# class TensorBoardCallback(BaseCallback):
-#     def __init__(self, log_dir: str):
-#         super(TensorBoardCallback, self).__init__()
-#         self.log_dir = log_dir
-#         self.writer = SummaryWriter(log_dir)
-
-#     def _on_step(self) -> bool:
-#         # Log episode rewards and lengths
-#         if 'episode' in self.locals:
-#             episode = self.locals['episode']
-#             self.writer.add_scalar("episode/reward", episode['r'], self.num_timesteps)
-#             self.writer.add_scalar("episode/length", episode['l'], self.num_timesteps)
-#         return True
-
-#     def _on_training_end(self) -> None:
-#         self.writer.close()
     
 
 # Initialize the ROS environment and SAC model
@@ -580,7 +564,7 @@ if __name__ == "__main__":
     # tensorboard_callback = TensorBoardCallback(log_dir='./logs/tensorboard/')
    
     # Train the model with the callbacks
-    total_timesteps = 20000
+    total_timesteps = 10000
     #model.learn(total_timesteps=total_timesteps, callback=[checkpoint_callback, tensorboard_callback])
     
     model.learn(total_timesteps=total_timesteps, progress_bar=True, tb_log_name="SAC",callback=checkpoint_callback)
