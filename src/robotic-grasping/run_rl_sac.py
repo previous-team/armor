@@ -9,6 +9,7 @@ from stable_baselines3 import SAC
 from stable_baselines3.common.buffers import ReplayBuffer
 from stable_baselines3.common.vec_env import DummyVecEnv
 from stable_baselines3.common.callbacks import CheckpointCallback, BaseCallback
+from stable_baselines3.common.monitor import Monitor
 
 from hardware.cam_gazebo import ROSCameraSubscriber
 from utils.data.camera_data_gazebo import CameraData
@@ -83,10 +84,10 @@ def push_along_line_from_action(action, debug=False):
         print(action)
 
     # Denormalize each action dimension
-    x = denormalize_action(action[0], real_x_min, real_x_max, normalized_min=-1) # Range length = max_action_value - min_action_value
-    y = denormalize_action(action[1], real_y_min, real_y_max, normalized_min=-1)
+    x = denormalize_action(action[0], real_x_min, real_x_max) # Range length = max_action_value - min_action_value
+    y = denormalize_action(action[1], real_y_min, real_y_max)
     z = denormalize_action(action[2], real_z_min, real_z_max)
-    theta = denormalize_action(action[3], real_theta_min, real_theta_max, normalized_min=-1)
+    theta = denormalize_action(action[3], real_theta_min, real_theta_max)
     theta_radians = math.radians(theta)
     length = denormalize_action(action[4], real_length_min, real_length_max)
     if debug:
@@ -191,13 +192,13 @@ class NiryoRobotEnv(gym.Env):
         self.grasp_model = Graspable(network_path=self.args.network, force_cpu=self.args.force_cpu)
 
         # Define the x, y, and z limits
-        xmin_limit = -1.0
+        xmin_limit = 0.0
         xmax_limit = 1.0
-        ymin_limit = -1.0
+        ymin_limit = 0.0
         ymax_limit = 1.0
         zmin_limit = 0.0
         zmax_limit = 1.0
-        thetamin_limit = -1
+        thetamin_limit = 0
         thetamax_limit = 1 # scale it from -180 to 180
         lenmin_limit = 0
         lenmax_limit = 1
@@ -209,6 +210,8 @@ class NiryoRobotEnv(gym.Env):
         high_limits = np.array([xmax_limit, ymax_limit, zmax_limit, thetamax_limit, lenmax_limit])
 
         self.action_space = spaces.Box(low=low_limits, high=high_limits,shape = (5,), dtype=np.float32)
+        
+        self.log_file = open('episode.txt', 'a')
 
     def reset(self):
         if self.debug:
@@ -376,6 +379,8 @@ class NiryoRobotEnv(gym.Env):
         if self.done:
             self.episode_count += 1
             # Log episode reward to info for callback
+            self.log_file.write(f'{self.episode_count}: Epsiode reward: {self.current_episode_reward} , No of timestep in the episode: {self.current_step} \n')
+            self.log_file.flush()  # Flush to ensure the data is written immediately
             info['episode'] = {
                 'r': self.current_episode_reward,
                 'l': self.current_step  # or use the total steps taken in the episode
@@ -395,14 +400,9 @@ class NiryoRobotEnv(gym.Env):
 
         # Check if it is graspable
         if self.graspable:
-                reward += 10.0
+                reward += 24.0
                 self.done = True
                 rospy.loginfo(f"Ending episode as target object is graspable after actions taken by the bot")
-        # Check if the episode has reached the maximum steps
-        elif self.current_step >= self.max_episode_steps:
-            reward += -5.0
-            self.done = True
-            rospy.loginfo("Ending episode as maximum steps reached")
         # Reward for increasing white pixel count if it is not the first step
         elif self.current_step != 1:
             # Reward for increasing white pixel count
@@ -411,25 +411,31 @@ class NiryoRobotEnv(gym.Env):
             elif self.current_white_pixel_count <= self.previous_white_pixel_count:
                 reward += -2.0
 
+        # Check if the episode has reached the maximum steps
+        if self.current_step >= self.max_episode_steps:
+            # reward += -5.0
+            self.done = True
+            rospy.loginfo("Ending episode as maximum steps reached")
+
         print(f'Reward:  {reward} , Done:  {self.done}')
         return reward, self.done
 
-class TensorBoardCallback(BaseCallback):
-    def __init__(self, log_dir: str):
-        super(TensorBoardCallback, self).__init__()
-        self.log_dir = log_dir
-        self.writer = SummaryWriter(log_dir)
+# class TensorBoardCallback(BaseCallback):
+#     def __init__(self, log_dir: str):
+#         super(TensorBoardCallback, self).__init__()
+#         self.log_dir = log_dir
+#         self.writer = SummaryWriter(log_dir)
 
-    def _on_step(self) -> bool:
-        # Log episode rewards and lengths
-        if 'episode' in self.locals:
-            episode = self.locals['episode']
-            self.writer.add_scalar("episode/reward", episode['r'], self.num_timesteps)
-            self.writer.add_scalar("episode/length", episode['l'], self.num_timesteps)
-        return True
+#     def _on_step(self) -> bool:
+#         # Log episode rewards and lengths
+#         if 'episode' in self.locals:
+#             episode = self.locals['episode']
+#             self.writer.add_scalar("episode/reward", episode['r'], self.num_timesteps)
+#             self.writer.add_scalar("episode/length", episode['l'], self.num_timesteps)
+#         return True
 
-    def _on_training_end(self) -> None:
-        self.writer.close()
+#     def _on_training_end(self) -> None:
+#         self.writer.close()
     
 
 # Initialize the ROS environment and SAC model
@@ -447,18 +453,19 @@ if __name__ == "__main__":
     # Create an environment instance
     env = DummyVecEnv([lambda: NiryoRobotEnv()])
 
+    logdir = "logs"
     # Set up SAC model with a specified buffer size
-    model = SAC("MultiInputPolicy", env, verbose=1, buffer_size=500)  # Set buffer size here
+    model = SAC("MultiInputPolicy", env, verbose=1, buffer_size=2000, tensorboard_log=logdir)  # Set buffer size here
 
     # Set up a checkpoint callback to save the model periodically
     checkpoint_callback = CheckpointCallback(save_freq=1000, save_path='./logs/', name_prefix='niryo_sac_model')
 
     # Set up a TensorBoard callback
-    tensorboard_callback = TensorBoardCallback(log_dir='./logs/tensorboard/')
+    # tensorboard_callback = TensorBoardCallback(log_dir='./logs/tensorboard/')
    
     # Train the model with the callbacks
     total_timesteps = 10000
-    model.learn(total_timesteps=total_timesteps, callback=[checkpoint_callback, tensorboard_callback])
+    model.learn(total_timesteps=total_timesteps, tb_log_name="SAC", callback=checkpoint_callback)
 
     # Save the trained model
     model.save("niryo_sac_model")
