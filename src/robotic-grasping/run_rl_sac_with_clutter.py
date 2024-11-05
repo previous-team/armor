@@ -239,7 +239,7 @@ class NiryoRobotEnv(gym.Env):
         self.current_step = 0  # Initialize current step
 
         # Define the maximum number of steps per episode
-        self.max_episode_steps = 50
+        self.max_episode_steps = 40
 
         # Define radius for local clutter density calculation
         self.local_clutter_radius = 30  # Adjust this value as needed(in pixels)
@@ -507,11 +507,11 @@ class NiryoRobotEnv(gym.Env):
 
         # Check if the target object is graspable
         if self.graspable:
-            reward += 10.0
+            reward += 15.0
             self.done = True
             rospy.loginfo(f"Ending episode as target object is graspable after actions taken by the bot")
         # Reward for varying white pixel count or clutter density if timestep > 1
-        elif self.current_step > 1:
+        if self.current_step > 1:
             # Reward for increasing white pixel count
             if self.current_white_pixel_count > self.previous_white_pixel_count:
                 reward += 2.0
@@ -520,14 +520,14 @@ class NiryoRobotEnv(gym.Env):
 
             # Reward for varying clutter density
             if self.current_white_pixel_count == 0:
-                if self.previous_global_clutter_density and (self.current_global_clutter_density > self.previous_global_clutter_density):
+                if self.previous_global_clutter_density and (self.current_global_clutter_density < self.previous_global_clutter_density):
                     reward += 3.0
-                elif self.previous_global_clutter_density and (self.current_global_clutter_density <= self.previous_global_clutter_density):
+                elif self.previous_global_clutter_density and (self.current_global_clutter_density >= self.previous_global_clutter_density):
                     reward += -3.0
             else:
-                if self.previous_local_clutter_density and (self.current_local_clutter_density > self.previous_local_clutter_density):
+                if self.previous_local_clutter_density and (self.current_local_clutter_density < self.previous_local_clutter_density):
                     reward += 3.0
-                elif self.previous_local_clutter_density and (self.current_local_clutter_density <= self.previous_local_clutter_density):
+                elif self.previous_local_clutter_density and (self.current_local_clutter_density >= self.previous_local_clutter_density):
                     reward += -3.0
         # Check if the episode has reached the maximum steps
         if self.current_step >= self.max_episode_steps:
@@ -538,23 +538,6 @@ class NiryoRobotEnv(gym.Env):
         print(f'Reward:  {reward} , Done:  {self.done}')
         return reward, self.done
 
-# class TensorBoardCallback(BaseCallback):
-#     def __init__(self, log_dir: str):
-#         super(TensorBoardCallback, self).__init__()
-#         self.log_dir = log_dir
-#         self.writer = SummaryWriter(log_dir)
-
-#     def _on_step(self) -> bool:
-#         # Log episode rewards and lengths
-#         if 'episode' in self.locals:
-#             episode = self.locals['episode']
-#             self.writer.add_scalar("episode/reward", episode['r'], self.num_timesteps)
-#             self.writer.add_scalar("episode/length", episode['l'], self.num_timesteps)
-#         return True
-
-#     def _on_training_end(self) -> None:
-#         self.writer.close()
-    
 
 # Initialize the ROS environment and SAC model
 if __name__ == "__main__":
@@ -577,13 +560,13 @@ if __name__ == "__main__":
     model = SAC("MultiInputPolicy", env, verbose=1, buffer_size=5000, tensorboard_log=logdir)  # Set buffer size here
 
     # Set up a checkpoint callback to save the model periodically
-    checkpoint_callback = CheckpointCallback(save_freq=5000, save_path='./logs/', name_prefix='niryo_sac_model')
+    checkpoint_callback = CheckpointCallback(save_freq=2000, save_path='./logs/', name_prefix='niryo_sac_model')
 
     # Set up a TensorBoard callback
     # tensorboard_callback = TensorBoardCallback(log_dir='./logs/tensorboard/')
    
     # Train the model with the callbacks
-    total_timesteps = 20000
+    total_timesteps = 10000
     #model.learn(total_timesteps=total_timesteps, callback=[checkpoint_callback, tensorboard_callback])
     
     model.learn(total_timesteps=total_timesteps, progress_bar=True, tb_log_name="SAC",callback=checkpoint_callback)
