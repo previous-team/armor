@@ -387,7 +387,7 @@ class NiryoRobotEnv(gym.Env):
             }
         print(f'Current episode reward : {self.current_episode_reward}')
 
-        return state, self.current_episode_reward, self.done, info
+        return state, reward, self.done, info
 
 
     def compute_reward(self, state):
