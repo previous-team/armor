@@ -239,7 +239,7 @@ class NiryoRobotEnv(gym.Env):
         self.current_step = 0  # Initialize current step
 
         # Define the maximum number of steps per episode
-        self.max_episode_steps = 50
+        self.max_episode_steps = 30
 
         # Define radius for local clutter density calculation
         self.local_clutter_radius = 30  # Adjust this value as needed(in pixels)
