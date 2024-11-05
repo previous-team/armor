@@ -523,14 +523,14 @@ class NiryoRobotEnv(gym.Env):
 
             # Reward for varying clutter density
             if self.current_white_pixel_count == 0:
-                if self.previous_global_clutter_density and (self.current_global_clutter_density > self.previous_global_clutter_density):
+                if self.previous_global_clutter_density and (self.current_global_clutter_density < self.previous_global_clutter_density):
                     reward += 3.0
-                elif self.previous_global_clutter_density and (self.current_global_clutter_density < self.previous_global_clutter_density):
+                elif self.previous_global_clutter_density and (self.current_global_clutter_density >= self.previous_global_clutter_density):
                     reward += -3.0
             else:
-                if self.previous_local_clutter_density and (self.current_local_clutter_density > self.previous_local_clutter_density):
+                if self.previous_local_clutter_density and (self.current_local_clutter_density < self.previous_local_clutter_density):
                     reward += 3.0
-                elif self.previous_local_clutter_density and (self.current_local_clutter_density < self.previous_local_clutter_density):
+                elif self.previous_local_clutter_density and (self.current_local_clutter_density >= self.previous_local_clutter_density):
                     reward += -3.0
 
         print(f'Reward:  {reward} , Done:  {self.done}')
