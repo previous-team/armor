@@ -494,7 +494,7 @@ class NiryoRobotEnv(gym.Env):
             }
         print(f'Current episode reward : {self.current_episode_reward}')
 
-        return state, self.current_episode_reward, self.done, info
+        return state, reward, self.done, info
 
 
     def compute_reward(self, state):
@@ -510,11 +510,6 @@ class NiryoRobotEnv(gym.Env):
             reward += 10.0
             self.done = True
             rospy.loginfo(f"Ending episode as target object is graspable after actions taken by the bot")
-        # Check if the episode has reached the maximum steps
-        elif self.current_step >= self.max_episode_steps:
-            reward += -5.0
-            self.done = True
-            rospy.loginfo("Ending episode as maximum steps reached")
         # Reward for varying white pixel count or clutter density if timestep > 1
         elif self.current_step > 1:
             # Reward for increasing white pixel count
@@ -527,13 +522,18 @@ class NiryoRobotEnv(gym.Env):
             if self.current_white_pixel_count == 0:
                 if self.previous_global_clutter_density and (self.current_global_clutter_density > self.previous_global_clutter_density):
                     reward += 3.0
-                elif self.previous_global_clutter_density and (self.current_global_clutter_density < self.previous_global_clutter_density):
+                elif self.previous_global_clutter_density and (self.current_global_clutter_density <= self.previous_global_clutter_density):
                     reward += -3.0
             else:
                 if self.previous_local_clutter_density and (self.current_local_clutter_density > self.previous_local_clutter_density):
                     reward += 3.0
-                elif self.previous_local_clutter_density and (self.current_local_clutter_density < self.previous_local_clutter_density):
+                elif self.previous_local_clutter_density and (self.current_local_clutter_density <= self.previous_local_clutter_density):
                     reward += -3.0
+        # Check if the episode has reached the maximum steps
+        if self.current_step >= self.max_episode_steps:
+            # reward += -5.0
+            self.done = True
+            rospy.loginfo("Ending episode as maximum steps reached")
 
         print(f'Reward:  {reward} , Done:  {self.done}')
         return reward, self.done
