@@ -494,7 +494,7 @@ class NiryoRobotEnv(gym.Env):
             }
         print(f'Current episode reward : {self.current_episode_reward}')
 
-        return state, self.current_episode_reward, self.done, info
+        return state, reward, self.done, info
 
 
     def compute_reward(self, state):
@@ -522,12 +522,12 @@ class NiryoRobotEnv(gym.Env):
             if self.current_white_pixel_count == 0:
                 if self.previous_global_clutter_density and (self.current_global_clutter_density > self.previous_global_clutter_density):
                     reward += 3.0
-                elif self.previous_global_clutter_density and (self.current_global_clutter_density < self.previous_global_clutter_density):
+                elif self.previous_global_clutter_density and (self.current_global_clutter_density <= self.previous_global_clutter_density):
                     reward += -3.0
             else:
                 if self.previous_local_clutter_density and (self.current_local_clutter_density > self.previous_local_clutter_density):
                     reward += 3.0
-                elif self.previous_local_clutter_density and (self.current_local_clutter_density < self.previous_local_clutter_density):
+                elif self.previous_local_clutter_density and (self.current_local_clutter_density <= self.previous_local_clutter_density):
                     reward += -3.0
         # Check if the episode has reached the maximum steps
         if self.current_step >= self.max_episode_steps:
