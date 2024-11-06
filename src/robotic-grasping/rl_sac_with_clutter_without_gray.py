@@ -231,7 +231,7 @@ class NiryoRobotEnv(gym.Env):
         self.current_step = 0  # Initialize current step
 
         # Define the maximum number of steps per episode
-        self.max_episode_steps = 40
+        self.max_episode_steps = 50
 
         # Define radius for local clutter density calculation
         self.local_clutter_radius = 30  # Adjust this value as needed(in pixels)
@@ -507,16 +507,16 @@ class NiryoRobotEnv(gym.Env):
             self.done = True
             rospy.loginfo(f"Ending episode as target object is graspable after actions taken by the bot")
         # Check if the episode has reached the maximum steps
-        elif self.current_step >= self.max_episode_steps:
+        if self.current_step >= self.max_episode_steps:
             # reward -= 5.0
             self.done = True
             rospy.loginfo("Ending episode as maximum steps reached")
         # Reward for varying white pixel count or clutter density if timestep > 1
         if self.current_step > 1:
             # Reward for increasing white pixel count
-            if self.current_white_pixel_count > self.previous_white_pixel_count:
+            if (self.current_white_pixel_count - self.previous_white_pixel_count) > 10:
                 reward += 2.0
-            elif self.current_white_pixel_count <= self.previous_white_pixel_count:
+            elif self.current_white_pixel_count < self.previous_white_pixel_count:
                 reward += -2.0
 
             # Reward for varying clutter density
@@ -554,14 +554,15 @@ if __name__ == "__main__":
     logdir = "logs"
 
     # Set up SAC model with a specified buffer size
-    model = SAC("MultiInputPolicy", env, verbose=1, buffer_size=2000, tensorboard_log=logdir,
-                learning_rate=5e-5,  # Lower critic learning rate
-                tau=0.005,           # Lower tau for target network updates
-                train_freq=1, 
-                gradient_steps=2,    # More frequent critic updates
-                batch_size=256,      # Larger batch size for smoother critic updates
-                ent_coef='auto_0.01' # Adjust entropy coefficient to control exploration)  # Set buffer size here
-    )
+    model = SAC("MultiInputPolicy", env, verbose=1, buffer_size=50000, tensorboard_log=logdir) 
+    # model = SAC("MultiInputPolicy", env, verbose=1, buffer_size=50000, tensorboard_log=logdir,
+    #             learning_rate=5e-5,  # Lower critic learning rate
+    #             tau=0.005,           # Lower tau for target network updates
+    #             train_freq=1, 
+    #             gradient_steps=2,    # More frequent critic updates
+    #             batch_size=256,      # Larger batch size for smoother critic updates
+    #             ent_coef='auto_0.01' # Adjust entropy coefficient to control exploration)  # Set buffer size here
+    # )
 
     # Set up a checkpoint callback to save the model periodically
     checkpoint_callback = CheckpointCallback(save_freq=5000, save_path='./logs/', name_prefix='niryo_sac_model')
@@ -570,7 +571,7 @@ if __name__ == "__main__":
     # tensorboard_callback = TensorBoardCallback(log_dir='./logs/tensorboard/')
    
     # Train the model with the callbacks
-    total_timesteps = 10000
+    total_timesteps = 100000
     #model.learn(total_timesteps=total_timesteps, callback=[checkpoint_callback, tensorboard_callback])
     
     model.learn(total_timesteps=total_timesteps, progress_bar=True, tb_log_name="SAC",callback=checkpoint_callback)
