@@ -95,9 +95,7 @@ def push_along_line_from_action(action, debug=False):
 
 
     # Go to home position
-    res = niryo_robot.move_joints(0, 0.5, -1.25, 0, 0, 0)
-    if debug and res and res[0] == 1:
-        print("Moved to home position")
+    res = go_to_home_position()
 
     # Close the gripper
     res = niryo_robot.grasp_with_tool()
@@ -114,15 +112,15 @@ def push_along_line_from_action(action, debug=False):
     # Calculate the final position based on the length and theta
     final_x, final_y = x + length * math.cos(theta_radians), y + length * math.sin(theta_radians)
     res = niryo_robot.move_pose(final_x, final_y, max(z + 0.07, 0.1), 0.0, 1.57, 0)
-    
+    if res[0] != 1:
+        if debug:
+            print("Error moving to the final position")
+        raise NiryoRosWrapperException("Error moving to the final position")
     if debug:
         print(f"Moved to the final position: final_x={final_x}, final_y={final_y}")
 
     # Return to home position
-    res = niryo_robot.move_joints(0, 0.5, -1.25, 0, 0, 0)
-    if debug:
-        print("Returned to home position")
-        
+    res = go_to_home_position()
     return True
 
 def calculate_pixel_clutter_density(rgb_image):
@@ -554,8 +552,16 @@ if __name__ == "__main__":
     # env = Monitor(env, filename=None, allow_early_resets=True)
 
     logdir = "logs"
+
     # Set up SAC model with a specified buffer size
-    model = SAC("MultiInputPolicy", env, verbose=1, buffer_size=5000, tensorboard_log=logdir)  # Set buffer size here
+    model = SAC("MultiInputPolicy", env, verbose=1, buffer_size=2000, tensorboard_log=logdir,
+                learning_rate=5e-5,  # Lower critic learning rate
+                tau=0.005,           # Lower tau for target network updates
+                train_freq=1, 
+                gradient_steps=2,    # More frequent critic updates
+                batch_size=256,      # Larger batch size for smoother critic updates
+                ent_coef='auto_0.01' # Adjust entropy coefficient to control exploration)  # Set buffer size here
+    )
 
     # Set up a checkpoint callback to save the model periodically
     checkpoint_callback = CheckpointCallback(save_freq=5000, save_path='./logs/', name_prefix='niryo_sac_model')
