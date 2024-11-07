@@ -6,6 +6,7 @@ from cv_bridge import CvBridge, CvBridgeError
 import cv2
 import numpy as np
 import concurrent.futures
+from skimage.transform import resize
 
 class CameraSubscriber:
     def __init__(self):
@@ -20,10 +21,33 @@ class CameraSubscriber:
         self.depth_image = None
         self.rgb_image = None
 
+    def crop(self, img, top_left, bottom_right):
+    
+    # Crop the image to a bounding box given by top left and bottom right pixels.
+    # :param top_left: tuple, top left pixel.
+    # :param bottom_right: tuple, bottom right pixel
+    # :param resize: If specified, resize the cropped image to this size
+    
+        dept = img[top_left[0]:bottom_right[0], top_left[1]:bottom_right[1]]
+
+        return dept
+    
+    def resize(self, img, shape):
+        """
+        Resize image to shape.
+        :param shape: New shape.
+        """
+        if img.shape == shape:
+            return
+        return resize(img, shape, preserve_range=True).astype(img.dtype)
+
     def depth_callback(self, data):
         try:
             self.depth_image = self.bridge.imgmsg_to_cv2(data, desired_encoding="passthrough")
             self.depth_image = cv2.normalize(self.depth_image, None, 0, 255, cv2.NORM_MINMAX, dtype=cv2.CV_8U)
+            self.depth_image = self.crop(self.depth_image, top_left=(0, 160), bottom_right=(720, 1120))
+            self.depth_image = resize(self.depth_image, (480, 640)) #for software only
+            self.depth_image = self.crop(self.depth_image, bottom_right=(352,432), top_left=(128,208))
         except CvBridgeError as e:
             rospy.logerr(f"Could not convert depth image: {str(e)}")
 
@@ -40,15 +64,20 @@ class CameraSubscriber:
         
         # Convert the RGB image to grayscale and apply edge detection
         gray = cv2.cvtColor(self.rgb_image, cv2.COLOR_BGR2GRAY)
+        # gray = self.depth_image.copy()
+        # gray = np.uint8(gray)
+
         blurred = cv2.GaussianBlur(gray, (5, 5), 0)
-        edges = cv2.Canny(blurred, 50, 150)
+        edges = cv2.Canny(blurred, 30, 200)
 
         # Find contours in the image to detect objects
-        contours, _ = cv2.findContours(edges, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        contours, _ = cv2.findContours(edges, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
         
         # Calculate distances between object centroids and their sizes
         objects = []
         total_area = self.rgb_image.shape[0] * self.rgb_image.shape[1]  # Total image area
+
+        self.test_img = self.rgb_image.copy()
 
         for contour in contours:
             # Calculate the bounding box of each object
@@ -57,6 +86,8 @@ class CameraSubscriber:
             # Remove small objects (noise)
             if w * h < 0.01 * total_area:
                 continue
+            else:
+                cv2.rectangle(self.test_img, (x, y), (x+w, y+h), (255, 0, 0), 2)
 
             centroid = (x + w // 2, y + h // 2)
 
@@ -114,6 +145,9 @@ class CameraSubscriber:
             
             # Display the Canny edges (optional)
             cv2.imshow("Canny Edges", edges)
+
+            # Display test image
+            cv2.imshow("Test image", self.test_img)
 
             cv2.waitKey(1)
 
