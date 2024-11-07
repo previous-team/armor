@@ -196,9 +196,7 @@ def calculate_pixel_clutter_density(rgb_image, depth_image):
     if total_density == 0:   ##to tackle if the total_density sum comes 0
         clutter_density_normalized = calculate_pixel_clutter_density(rgb_image, depth_image)
 
-    # Convert clutter density to 3D array
-    clutter_density_normalized = clutter_density_normalized.reshape(clutter_density_normalized.shape[0], clutter_density_normalized.shape[1], 1)
-    
+     
     return clutter_density_normalized
 
 
@@ -232,7 +230,7 @@ class NiryoRobotEnv(gym.Env):
         self.curent_global_clutter_density = None
         self.previous_local_clutter_density = None
         self.current_local_clutter_density = None
-        self.centroid = np.array([-1, -1], dtype=np.int8)
+        self.centroid = np.array([-1, -1], dtype=np.int16)
 
         # Episode tracking variables
         self.episode_count = 0
@@ -261,8 +259,8 @@ class NiryoRobotEnv(gym.Env):
         white_pixel_count_high = img_height * img_width  # Maximum possible number of white pixels
 
         # Mask centroid: X and Y coordinates (floating-point values)
-        centroid_low = np.array([-1, -1], dtype=np.int8)   # Lower bounds
-        centroid_high = np.array([223, 223], dtype=np.int8)
+        centroid_low = np.array([-1, -1], dtype=np.int16)   # Lower bounds
+        centroid_high = np.array([223, 223], dtype=np.int16)
 
         # Clutter density: 1 channel, values range from 0 to 1
         clutter_density_low = 0
@@ -273,7 +271,7 @@ class NiryoRobotEnv(gym.Env):
             'gray': spaces.Box(low=gray_low, high=gray_high, shape=(img_height, img_width, 1), dtype=np.float32), #grayscale image
             'depth': spaces.Box(low=depth_low, high=depth_high, shape=(img_height, img_width, 1), dtype=np.float32),
             'white_pixel_count': spaces.Box(low=white_pixel_count_low, high=white_pixel_count_high, shape=(1,), dtype=np.int32),
-            'centroid': spaces.Box(low=centroid_low, high=centroid_high, shape=(2,), dtype=np.int8),  # 2D centroid (X, Y)
+            'centroid': spaces.Box(low=centroid_low, high=centroid_high, shape=(2,), dtype=np.int16),  # 2D centroid (X, Y)
             'clutter_density': spaces.Box(low=clutter_density_low, high=clutter_density_high, shape=(img_height, img_width, 1), dtype=np.float32)
         })
 
@@ -319,7 +317,7 @@ class NiryoRobotEnv(gym.Env):
             self.current_global_clutter_density = None
             self.previous_local_clutter_density = None
             self.current_local_clutter_density = None
-            self.centroid = np.array([-1, -1], dtype=np.int8)
+            self.centroid = np.array([-1, -1], dtype=np.int16)
 
             # Episode tracking variables
             self.current_episode_reward = 0
@@ -397,16 +395,18 @@ class NiryoRobotEnv(gym.Env):
         # Calculate the centroid of the mask
         num_labels, labels, stats, centroids = cv2.connectedComponentsWithStats(mask_image)
         white_pixel_count = stats[:, cv2.CC_STAT_AREA].sum()  # Total white pixel count
-        self.centroid = centroids[0] if num_labels > 1 else np.array([-1, -1], dtype=np.int8)  # Handle invalid case
+        self.centroid = centroids[0] if num_labels > 1 else np.array([-1, -1], dtype=np.int16)  # Handle invalid case
 
         # Convert the color image to grayscale and normalise
         gray_image = cv2.cvtColor(color_image, cv2.COLOR_RGB2GRAY)
         gray_image_normalised = cv2.normalize(gray_image, None, 0, 1, cv2.NORM_MINMAX)  # Normalising the grayscaled normalised rgb image
-        gray_image = gray_image.reshape(gray_image.shape[0], gray_image.shape[1], 1)
+        gray_image_normalised = gray_image_normalised.reshape(gray_image_normalised.shape[0], gray_image_normalised.shape[1], 1)
 
         # Normalise the depth image
         min_abs, max_abs = 10, 100
         depth_image = np.clip((denormalised_depth - min_abs) / (max_abs - min_abs), 0, 1)
+
+        depth_image = depth_image.reshape(depth_image.shape[0], depth_image.shape[1], 1)
 
         if self.debug:
             print(f'gray{gray_image_normalised.shape}')
@@ -425,6 +425,9 @@ class NiryoRobotEnv(gym.Env):
             self.current_local_clutter_density = np.sum(self.clutter_map[
                 min(max(0, int(self.centroid[1] - self.local_clutter_radius)), 224):min(max(0, int(self.centroid[1] + self.local_clutter_radius)), 224), 
                 min(max(0, int(self.centroid[0] - self.local_clutter_radius)), 224):min(max(0, int(self.centroid[0] + self.local_clutter_radius)), 224)])
+
+        # Convert clutter density to 3D array
+        self.clutter_map = self.clutter_map.reshape(self.clutter_map.shape[0], self.clutter_map.shape[1], 1)
 
         # Return the state as a dictionary matching observation space
         state = {
