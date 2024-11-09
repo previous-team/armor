@@ -493,7 +493,7 @@ class NiryoRobotEnv(gym.Env):
         return state,reward, self.done, info
 
 
-    def compute_reward(self, state):
+    def compute_reward(self):
         if self.debug:
             print('in reward')
         reward = 0.0
@@ -506,33 +506,34 @@ class NiryoRobotEnv(gym.Env):
             reward += 15.0
             self.done = True
             rospy.loginfo(f"Ending episode as target object is graspable after actions taken by the bot")
-        # Check if the episode has reached the maximum steps
-        if self.current_step >= self.max_episode_steps:
-            # reward -= 5.0
-            self.done = True
-            rospy.loginfo("Ending episode as maximum steps reached")
         # Reward for varying white pixel count or clutter density if timestep > 1
-        if self.current_step > 1:
+        if self.current_step > 0:
             # Reward for increasing white pixel count
-            if self.current_white_pixel_count > self.previous_white_pixel_count:
+            if self.previous_white_pixel_count and ((self.current_white_pixel_count - self.previous_white_pixel_count) > 10):
                 reward += 2.0
-            elif self.current_white_pixel_count <= self.previous_white_pixel_count:
-                reward += -2.0
+            elif self.previous_white_pixel_count and (self.current_white_pixel_count < self.previous_white_pixel_count):
+                reward += -1.0
 
             # Reward for varying clutter density
             if self.current_white_pixel_count == 0:
                 if self.previous_global_clutter_density and (self.current_global_clutter_density < self.previous_global_clutter_density):
                     reward += 3.0
                 elif self.previous_global_clutter_density and (self.current_global_clutter_density >= self.previous_global_clutter_density):
-                    reward += -3.0
+                    reward += -1.0
             else:
                 if self.previous_local_clutter_density and (self.current_local_clutter_density < self.previous_local_clutter_density):
                     reward += 3.0
                 elif self.previous_local_clutter_density and (self.current_local_clutter_density >= self.previous_local_clutter_density):
-                    reward += -3.0
+                    reward += -1.0
+        # Check if the episode has reached the maximum steps
+        if self.current_step >= self.max_episode_steps:
+            # reward += -5.0
+            self.done = True
+            rospy.loginfo("Ending episode as maximum steps reached")
 
         print(f'Reward:  {reward} , Done:  {self.done}')
         return reward, self.done
+
     
 
 # Initialize the ROS environment and SAC model
