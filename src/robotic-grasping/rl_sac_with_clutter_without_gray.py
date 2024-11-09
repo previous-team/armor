@@ -469,7 +469,7 @@ class NiryoRobotEnv(gym.Env):
             state = self.get_state()
 
             # Compute the reward and check if the episode is done
-            computed_reward, self.done = self.compute_reward(state)
+            computed_reward, self.done = self.compute_reward()
 
             # Update the reward
             reward += computed_reward
@@ -566,7 +566,7 @@ if __name__ == "__main__":
     # )
 
     # Set up a checkpoint callback to save the model periodically
-    checkpoint_callback = CheckpointCallback(save_freq=5000, save_path='./logs/', name_prefix='niryo_sac_model')
+    checkpoint_callback = CheckpointCallback(save_freq=1000, save_path='./logs/', name_prefix='niryo_sac_model')
 
     # Set up a TensorBoard callback
     # tensorboard_callback = TensorBoardCallback(log_dir='./logs/tensorboard/')
