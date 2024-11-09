@@ -182,7 +182,7 @@ def calculate_pixel_clutter_density(rgb_image):
 
     # Normalize the clutter density map
     clutter_density_normalized = clutter_density_map / 500
-    
+    clutter_density_normalized = clutter_density_normalized.reshape(224,224,1)
     
     total_density = np.sum(clutter_density_normalized)
     # print(" total_density:", total_density)
@@ -261,10 +261,10 @@ class NiryoRobotEnv(gym.Env):
 
         # Observation space initialization
         self.observation_space = spaces.Dict({
-            'depth': spaces.Box(low=depth_low, high=depth_high, shape=(img_height, img_width), dtype=np.float32),
+            'depth': spaces.Box(low=depth_low, high=depth_high, shape=(img_height, img_width,1), dtype=np.float32),
             'white_pixel_count': spaces.Box(low=white_pixel_count_low, high=white_pixel_count_high, shape=(1,), dtype=np.int32),
             'centroid': spaces.Box(low=centroid_low, high=centroid_high, shape=(2,), dtype=np.float32),  # 2D centroid (X, Y)
-            'clutter_density': spaces.Box(low=clutter_density_low, high=clutter_density_high, shape=(img_height, img_width), dtype=np.float32)
+            'clutter_density': spaces.Box(low=clutter_density_low, high=clutter_density_high, shape=(img_height, img_width,1), dtype=np.float32)
         })
 
         # Initilaise the Model for Graspable
@@ -402,7 +402,7 @@ class NiryoRobotEnv(gym.Env):
         # Normalise the depth image
         min_abs, max_abs = 10, 100
         depth_image = np.clip((denormalised_depth - min_abs) / (max_abs - min_abs), 0, 1)
-        depth_image = depth_image.squeeze()
+        # depth_image = depth_image.squeeze()
 
         if self.debug:
             print(f'gray{gray_image_normalised.shape}')
@@ -514,9 +514,9 @@ class NiryoRobotEnv(gym.Env):
         # Reward for varying white pixel count or clutter density if timestep > 1
         if self.current_step > 1:
             # Reward for increasing white pixel count
-            if (self.current_white_pixel_count - self.previous_white_pixel_count) > 10:
+            if self.current_white_pixel_count > self.previous_white_pixel_count:
                 reward += 2.0
-            elif self.current_white_pixel_count < self.previous_white_pixel_count:
+            elif self.current_white_pixel_count <= self.previous_white_pixel_count:
                 reward += -2.0
 
             # Reward for varying clutter density
