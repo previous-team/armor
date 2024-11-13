@@ -6,10 +6,9 @@ import cv2
 from niryo_robot_python_ros_wrapper import *
 from niryo_robot_utils import NiryoRosWrapperException
 from stable_baselines3 import SAC
-from stable_baselines3.common.buffers import ReplayBuffer
 from stable_baselines3.common.vec_env import DummyVecEnv
-from stable_baselines3.common.callbacks import CheckpointCallback, BaseCallback
-from stable_baselines3.common.monitor import Monitor
+from stable_baselines3.common.callbacks import CheckpointCallback
+
 
 from hardware.cam_gazebo import ROSCameraSubscriber
 from utils.data.camera_data_gazebo import CameraData
@@ -19,6 +18,9 @@ from armor.srv import delete_and_spawn_models
 import gym
 from gym import spaces
 from torch.utils.tensorboard import SummaryWriter
+
+# import os
+# os.environ['CUDA_LAUNCH_BLOCKING'] = '1'
 
 def parse_args():
     '''
@@ -125,6 +127,7 @@ def push_along_line_from_action(action, debug=False):
     return True
 
 
+
 # Define the custom Niryo environment
 class NiryoRobotEnv(gym.Env):
     def __init__(self):
@@ -149,9 +152,10 @@ class NiryoRobotEnv(gym.Env):
         # Define variables for the environment
         self.done = False
         self.graspable = None
-        self.previous_white_pixel_count = 0
-        self.current_white_pixel_count = 0
-        self.centroid = np.array([-1.0, -1.0], dtype=np.float32)
+        self.previous_white_pixel_count = None
+        self.current_white_pixel_count = None
+
+        self.centroid = np.array([-1, -1], dtype=np.int16)
 
         # Episode tracking variables
         self.episode_count = 0
@@ -159,7 +163,8 @@ class NiryoRobotEnv(gym.Env):
         self.current_step = 0  # Initialize current step
 
         # Define the maximum number of steps per episode
-        self.max_episode_steps = 25
+        self.max_episode_steps = 50
+
 
         # Define image sizes
         img_height, img_width = 224, 224
@@ -177,16 +182,17 @@ class NiryoRobotEnv(gym.Env):
         white_pixel_count_high = img_height * img_width  # Maximum possible number of white pixels
 
         # Mask centroid: X and Y coordinates (floating-point values)
-        centroid_low = np.array([0, 0], dtype=np.float32)   # Lower bounds
-        centroid_high = np.array([224, 224], dtype=np.float32)
+        centroid_low = np.array([-1, -1], dtype=np.int16)   # Lower bounds
+        centroid_high = np.array([223, 223], dtype=np.int16)
+
 
         # Observation space initialization
         self.observation_space = spaces.Dict({
-            'gray': spaces.Box(low=gray_low, high=gray_high, shape=(img_height, img_width), dtype=np.uint8), #grayscale image
-            'depth': spaces.Box(low=depth_low, high=depth_high, shape=(img_height, img_width), dtype=np.float32),
+            'gray': spaces.Box(low=gray_low, high=gray_high, shape=(img_height, img_width, 1), dtype=np.float32), #grayscale image
+            'depth': spaces.Box(low=depth_low, high=depth_high, shape=(img_height, img_width, 1), dtype=np.float32),
             'white_pixel_count': spaces.Box(low=white_pixel_count_low, high=white_pixel_count_high, shape=(1,), dtype=np.int32),
-            'centroid': spaces.Box(low=centroid_low, high=centroid_high, shape=(2,), dtype=np.float32)  # 2D centroid (X, Y)
-        })
+            'centroid': spaces.Box(low=centroid_low, high=centroid_high, shape=(2,), dtype=np.int16),  # 2D centroid (X, Y)
+            })
 
         # Initilaise the Model for Graspable
         self.grasp_model = Graspable(network_path=self.args.network, force_cpu=self.args.force_cpu)
@@ -198,10 +204,10 @@ class NiryoRobotEnv(gym.Env):
         ymax_limit = 1.0
         zmin_limit = 0.0
         zmax_limit = 1.0
-        thetamin_limit = 0
-        thetamax_limit = 1 # scale it from -180 to 180
-        lenmin_limit = 0
-        lenmax_limit = 1
+        thetamin_limit = 0.0
+        thetamax_limit = 1.0 # scale it from -180 to 180
+        lenmin_limit = 0.0
+        lenmax_limit = 1.0
 
 
         # Define the action space: [x, y, z, theta, length]
@@ -224,9 +230,9 @@ class NiryoRobotEnv(gym.Env):
             # Reset the environment variables
             self.done = False
             self.graspable = None
-            self.previous_white_pixel_count = 0
-            self.current_white_pixel_count = 0
-            self.centroid = np.array([-1.0, -1.0], dtype=np.float32)
+            self.previous_white_pixel_count = None
+            self.current_white_pixel_count = None
+            self.centroid = np.array([-1, -1], dtype=np.int16)
 
             # Episode tracking variables
             self.current_episode_reward = 0
@@ -276,7 +282,7 @@ class NiryoRobotEnv(gym.Env):
         x, depth_image, denormalised_depth, rgb_img = self.cam_data.get_data(rgb=rgb, depth=depth)
 
         # Check if the target object is graspable
-        self.graspable = self.grasp_model.run_graspable(x, depth_image, denormalised_depth, rgb_img )
+        self.graspable = self.grasp_model.run_graspable(x, depth_image, denormalised_depth, rgb_img)
 
         # Get the denormalised color image
         color_image = self.cam_data.get_rgb(rgb, False)
@@ -304,27 +310,31 @@ class NiryoRobotEnv(gym.Env):
         # Calculate the centroid of the mask
         num_labels, labels, stats, centroids = cv2.connectedComponentsWithStats(mask_image)
         white_pixel_count = stats[:, cv2.CC_STAT_AREA].sum()  # Total white pixel count
-        self.centroid = centroids[0] if num_labels > 1 else np.array([-1.0, -1.0], dtype=np.float32)  # Handle invalid case
+        self.centroid = centroids[0] if num_labels > 1 else np.array([-1, -1], dtype=np.int16)  # Handle invalid case
 
         # Convert the color image to grayscale and normalise
-        gray_image = cv2.cvtColor(color_image,cv2.COLOR_RGB2GRAY)
-        gray_image_normalised = cv2.normalize(gray_image, None, 0, 255, cv2.NORM_MINMAX)  # Normalising the grayscaled normalised rgb image
+        gray_image = cv2.cvtColor(color_image, cv2.COLOR_RGB2GRAY)
+        gray_image_normalised = cv2.normalize(gray_image, None, 0, 1, cv2.NORM_MINMAX)  # Normalising the grayscaled normalised rgb image
+        gray_image_normalised = gray_image_normalised.reshape(gray_image_normalised.shape[0], gray_image_normalised.shape[1], 1)
 
         # Normalise the depth image
         min_abs, max_abs = 10, 100
         depth_image = np.clip((denormalised_depth - min_abs) / (max_abs - min_abs), 0, 1)
-        depth_image = depth_image.squeeze()
+
+        depth_image = depth_image.reshape(depth_image.shape[0], depth_image.shape[1], 1)
 
         if self.debug:
             print(f'gray{gray_image_normalised.shape}')
             print(f'depth{depth_image.shape}')
+
+        
 
         # Return the state as a dictionary matching observation space
         state = {
             'gray': gray_image_normalised,
             'depth': depth_image,  # Add channel dimension for depth
             'white_pixel_count': np.array(self.current_white_pixel_count, dtype=np.int32),# Send number of white pixels and centroid coordinates
-            'centroid':np.array(self.centroid,dtype = np.float32)
+            'centroid':np.array(self.centroid, dtype = np.float32)
         }
 
         rospy.loginfo('New STATE registered')
@@ -359,14 +369,14 @@ class NiryoRobotEnv(gym.Env):
             niryo_robot.clear_collision_detected()
 
             # Penalize for the collision
-            reward -= 5
+            reward -= 2 #changed from 5 to 2
         
         finally:
             # Get the new state
             state = self.get_state()
 
             # Compute the reward and check if the episode is done
-            computed_reward, self.done = self.compute_reward(state)
+            computed_reward, self.done = self.compute_reward()
 
             # Update the reward
             reward += computed_reward
@@ -390,7 +400,7 @@ class NiryoRobotEnv(gym.Env):
         return state, reward, self.done, info
 
 
-    def compute_reward(self, state):
+    def compute_reward(self):
         if self.debug:
             print('in reward')
         reward = 0.0
@@ -398,19 +408,22 @@ class NiryoRobotEnv(gym.Env):
         if self.debug:
             print("Current_white_pixel_count:", self.current_white_pixel_count)
 
-        # Check if it is graspable
+        # Check if the target object is graspable
         if self.graspable:
-                reward += 24.0
-                self.done = True
-                rospy.loginfo(f"Ending episode as target object is graspable after actions taken by the bot")
-        # Reward for increasing white pixel count if it is not the first step
-        elif self.current_step != 1:
-            # Reward for increasing white pixel count
-            if self.current_white_pixel_count > self.previous_white_pixel_count:
-                reward += 2.0
-            elif self.current_white_pixel_count <= self.previous_white_pixel_count:
-                reward += -2.0
+            reward += 10.0
+            self.done = True
+            rospy.loginfo(f"Ending episode as target object is graspable after actions taken by the bot")
 
+        if self.current_step > 0:
+            # Reward for increasing white pixel count
+            if self.previous_white_pixel_count and ((self.current_white_pixel_count - self.previous_white_pixel_count) > 10):
+                reward += 2.0
+            elif self.previous_white_pixel_count and (self.current_white_pixel_count - self.previous_white_pixel_count) < 10:
+                reward += -1.0
+            # elif self.previous_white_pixel_count and (self.current_white_pixel_count == self.previous_white_pixel_count):
+            #     reward += -0.5
+            
+            
         # Check if the episode has reached the maximum steps
         if self.current_step >= self.max_episode_steps:
             # reward += -5.0
@@ -420,23 +433,6 @@ class NiryoRobotEnv(gym.Env):
         print(f'Reward:  {reward} , Done:  {self.done}')
         return reward, self.done
 
-# class TensorBoardCallback(BaseCallback):
-#     def __init__(self, log_dir: str):
-#         super(TensorBoardCallback, self).__init__()
-#         self.log_dir = log_dir
-#         self.writer = SummaryWriter(log_dir)
-
-#     def _on_step(self) -> bool:
-#         # Log episode rewards and lengths
-#         if 'episode' in self.locals:
-#             episode = self.locals['episode']
-#             self.writer.add_scalar("episode/reward", episode['r'], self.num_timesteps)
-#             self.writer.add_scalar("episode/length", episode['l'], self.num_timesteps)
-#         return True
-
-#     def _on_training_end(self) -> None:
-#         self.writer.close()
-    
 
 # Initialize the ROS environment and SAC model
 if __name__ == "__main__":
@@ -452,10 +448,11 @@ if __name__ == "__main__":
 
     # Create an environment instance
     env = DummyVecEnv([lambda: NiryoRobotEnv()])
+    # env = Monitor(env, filename=None, allow_early_resets=True)
 
     logdir = "logs"
     # Set up SAC model with a specified buffer size
-    model = SAC("MultiInputPolicy", env, verbose=1, buffer_size=2000, tensorboard_log=logdir)  # Set buffer size here
+    model = SAC("MultiInputPolicy", env, verbose=1, buffer_size=10000, tensorboard_log=logdir)  # Set buffer size here
 
     # Set up a checkpoint callback to save the model periodically
     checkpoint_callback = CheckpointCallback(save_freq=1000, save_path='./logs/', name_prefix='niryo_sac_model')
@@ -464,8 +461,10 @@ if __name__ == "__main__":
     # tensorboard_callback = TensorBoardCallback(log_dir='./logs/tensorboard/')
    
     # Train the model with the callbacks
-    total_timesteps = 10000
-    model.learn(total_timesteps=total_timesteps, tb_log_name="SAC", callback=checkpoint_callback)
+    total_timesteps = 20000
+    #model.learn(total_timesteps=total_timesteps, callback=[checkpoint_callback, tensorboard_callback])
+    
+    model.learn(total_timesteps=total_timesteps, progress_bar=True, tb_log_name="SAC",callback=checkpoint_callback)
 
     # Save the trained model
     model.save("niryo_sac_model")
