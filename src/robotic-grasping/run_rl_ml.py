@@ -4,6 +4,7 @@ import argparse
 import logging
 import math
 
+import cv2
 import matplotlib.pyplot as plt
 import numpy as np
 import torch.utils.data
@@ -144,7 +145,7 @@ def filter_grasps(grasps, img, depth_img, fx, fy, ppx, ppy, red_thresh=0, green_
             img[1, cy, cx] > green_thresh and 
             img[2, cy, cx] > blue_thresh):
             
-            angles = np.linspace(0, 2 * np.pi, 16) # 16 angles for the rectangle
+            angles = np.linspace(0, np.pi, 18) # 18 angles for the rectangle
             # Insert obtained angle from ML to the first index
             angles = np.insert(angles, 0, g.angle)
 
@@ -261,6 +262,30 @@ def z_detect_grasps(rgb_img, depth, q_img, ang_img, width_img=None, no_grasps=1)
 
     return filtered_grasps
 
+def get_target_centroid(rgb_img):
+
+    # Convert to HSV image
+    hsv_img = cv2.cvtColor(rgb_img, cv2.COLOR_RGB2HSV)
+    # Color range for the target object
+    lower_red_1 = np.array([0, 120, 70])
+    upper_red_1 = np.array([10, 255, 255])
+    lower_red_2 = np.array([170, 120, 70])
+    upper_red_2 = np.array([180, 255, 255])
+
+    # Create a mask for the red color
+    mask1 = cv2.inRange(hsv_img, lower_red_1, upper_red_1)
+    mask2 = cv2.inRange(hsv_img, lower_red_2, upper_red_2)
+    mask_image = mask1 | mask2
+
+    # Calculate the centroid of the mask return (-1, -1) if no mask
+    if mask_image.sum() == 0:
+        return (-1, -1)
+    M = cv2.moments(mask_image)
+    cx = int(M["m10"] / M["m00"])
+    cy = int(M["m01"] / M["m00"])
+
+    return (cy, cx)
+
 
 def parse_args():
     parser = argparse.ArgumentParser(description='Evaluate network')
@@ -296,7 +321,7 @@ class Graspable:
         # Get the compute device
         self.device = get_device(force_cpu)
 
-    def run_graspable(self, x, depth_image, denormalised_depth, rgb_img):
+    def run_graspable(self, x, depth_image, denormalised_depth, rgb_img, denormalised_rgb):
         # Run the grasp detection logic
         with torch.no_grad():
             xc = x.to(self.device)
@@ -305,16 +330,15 @@ class Graspable:
             # Post-process the network output
             q_img, ang_img, width_img = post_process_output(pred['pos'], pred['cos'], pred['sin'], pred['width'])
             grasps = z_detect_grasps(rgb_img, denormalised_depth, q_img, ang_img, width_img=None, no_grasps=10)
-            # # Visualize the results
-            # fig = plt.figure(figsize=(10, 10))
-            # plot_results(fig=fig,
-            #              rgb_img=rgb_img,
-            #              depth_img=np.squeeze(denormalised_depth),
-            #              grasp_q_img=q_img,
-            #              grasp_angle_img=ang_img,
-            #              no_grasps=10,
-            #              grasp_width_img=width_img,
-            #              grasps=grasps)  
+
+            if not len(grasps):
+                # Get the target objects centroid
+                target_centroid = get_target_centroid(denormalised_rgb)
+
+                # Filter out grasps that are not on the object or obstructed by depth
+                grasps = filter_grasps([Grasp(center=target_centroid, angle=0)], rgb_img, denormalised_depth, 462.1379699707031, 462.1379699707031, 111, 111)
+
+            
         return bool(len(grasps))
 
 
