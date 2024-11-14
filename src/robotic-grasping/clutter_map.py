@@ -43,11 +43,12 @@ class CameraSubscriber:
 
     def depth_callback(self, data):
         try:
-            self.depth_image = self.bridge.imgmsg_to_cv2(data, desired_encoding="passthrough")
-            self.depth_image = cv2.normalize(self.depth_image, None, 0, 255, cv2.NORM_MINMAX, dtype=cv2.CV_8U)
-            self.depth_image = self.crop(self.depth_image, top_left=(0, 160), bottom_right=(720, 1120))
-            self.depth_image = resize(self.depth_image, (480, 640)) #for software only
-            self.depth_image = self.crop(self.depth_image, bottom_right=(352,432), top_left=(128,208))
+            depth_image = self.bridge.imgmsg_to_cv2(data, desired_encoding="passthrough")
+            # depth_image = cv2.normalize(depth_image, None, 0, 255, cv2.NORM_MINMAX, dtype=cv2.CV_8U)
+            depth_image = np.array(depth_image, dtype=np.float32)
+            depth_image = self.crop(depth_image, top_left=(0, 160), bottom_right=(720, 1120))
+            depth_image = resize(depth_image, (480, 640)) #for software only
+            self.depth_image = self.crop(depth_image, bottom_right=(352,432), top_left=(128,208))
         except CvBridgeError as e:
             rospy.logerr(f"Could not convert depth image: {str(e)}")
 
@@ -63,31 +64,32 @@ class CameraSubscriber:
             return None
         
         # Convert the RGB image to grayscale and apply edge detection
-        gray = cv2.cvtColor(self.rgb_image, cv2.COLOR_BGR2GRAY)
-        # gray = self.depth_image.copy()
-        # gray = np.uint8(gray)
+        # gray = cv2.cvtColor(self.rgb_image, cv2.COLOR_BGR2GRAY)
+        gray = self.depth_image.copy()
+        gray = np.uint8(gray)
+        print("Max:", np.max(gray), "Min:", np.min(gray))
 
-        blurred = cv2.GaussianBlur(gray, (5, 5), 0)
-        edges = cv2.Canny(blurred, 30, 200)
+        # blurred = cv2.GaussianBlur(gray, (9, 9), 0)
+        edges = cv2.Canny(gray, 30, 100)
 
         # Find contours in the image to detect objects
         contours, _ = cv2.findContours(edges, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
         
         # Calculate distances between object centroids and their sizes
         objects = []
-        total_area = self.rgb_image.shape[0] * self.rgb_image.shape[1]  # Total image area
+        total_area = self.depth_image.shape[0] * self.depth_image.shape[1]  # Total image area
 
-        self.test_img = self.rgb_image.copy()
+        self.test_img = self.depth_image.copy()
 
         for contour in contours:
             # Calculate the bounding box of each object
             x, y, w, h = cv2.boundingRect(contour)
             
             # Remove small objects (noise)
-            if w * h < 0.01 * total_area:
-                continue
-            else:
-                cv2.rectangle(self.test_img, (x, y), (x+w, y+h), (255, 0, 0), 2)
+            # if w * h < 0.01 * total_area:
+            #     continue
+            # else:
+            cv2.rectangle(self.test_img, (x, y), (x+w, y+h), (255, 0, 0), 2)
 
             centroid = (x + w // 2, y + h // 2)
 
@@ -114,8 +116,8 @@ class CameraSubscriber:
                 clutter_density += (1 / (distance + 1e-5)) * object_size
             return clutter_density
 
-        for x in range(0, self.rgb_image.shape[1], window_size):
-            for y in range(0, self.rgb_image.shape[0], window_size):
+        for x in range(0, self.depth_image.shape[1], window_size):
+            for y in range(0, self.depth_image.shape[0], window_size):
                 clutter_density = min(calculate_clutter_for_window(x, y), 500)
                 clutter_density_map[y:y+window_size, x:x+window_size] = clutter_density
 
@@ -129,8 +131,8 @@ class CameraSubscriber:
             
             # Calculate clutter density map for each pixel
             clutter_density_map, edges = self.calculate_clutter_density()
-            print("clutter:",clutter_density_map)
-            print("length:",len(clutter_density_map))
+            # print("clutter:",clutter_density_map)
+            # print("length:",len(clutter_density_map))
             if clutter_density_map is not None:
                 print("Clutter density map calculated.")
             
