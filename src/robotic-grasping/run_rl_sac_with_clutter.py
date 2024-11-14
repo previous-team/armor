@@ -136,66 +136,57 @@ def calculate_pixel_clutter_density(rgb_image, depth_image):
     if rgb_image is None or depth_image is None:
         return None
         
-    # Convert the RGB image to grayscale and apply edge detection
-    gray = cv2.cvtColor(rgb_image, cv2.COLOR_BGR2GRAY)
-    blurred = cv2.GaussianBlur(gray, (5, 5), 0)
-    edges = cv2.Canny(blurred, 30, 200)
+    # Apply edge detection
+    depth_image = np.uint8(depth_image)
+    edges = cv2.Canny(depth_image, 30, 100)
 
     # Find contours in the image to detect objects
     contours, _ = cv2.findContours(edges, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
         
     # Initialize the list of objects
     objects = []
-    total_area = rgb_image.shape[0] * rgb_image.shape[1]  # Total image area
 
     for contour in contours:
         # Calculate the bounding box of each object
         x, y, w, h = cv2.boundingRect(contour)
-            
-        # Remove small objects (noise)
-        if w * h < 0.01 * total_area:
-            continue
 
         centroid = (x + w // 2, y + h // 2)
 
         # Find the corresponding depth of the object by averaging depth pixels within the bounding box
         depth_region = depth_image[y:y+h, x:x+w]
-        avg_depth = np.mean(depth_region)
 
         # Calculate object size (approximated by bounding box area)
         object_size = w * h
             
         # Append object position and depth
-        objects.append((centroid, avg_depth, object_size))
+        objects.append((centroid, object_size))
         
     # Initialize clutter density map
-    clutter_density_map = np.zeros_like(gray, dtype=np.float32)
+    clutter_density_map = np.zeros_like(depth_image, dtype=np.float32)
 
     # Define window size
     window_size = 5  # Adjust this value as needed
 
     def calculate_clutter_for_window(x, y):
         clutter_density = 0
-        for other_centroid, other_depth, object_size in objects:
+        for other_centroid, object_size in objects:
             distance = np.linalg.norm(np.array((x, y)) - np.array(other_centroid))
             clutter_density += (1 / (distance + 1e-5)) * object_size
         return clutter_density
 
     # Calculate clutter density for each window
-    for x in range(0, rgb_image.shape[1], window_size):
-        for y in range(0, rgb_image.shape[0], window_size):
+    for x in range(0, depth_image.shape[1], window_size):
+        for y in range(0, depth_image.shape[0], window_size):
             clutter_density = min(calculate_clutter_for_window(x, y), 520)  # Clip the clutter density values
             clutter_density_map[y:y+window_size, x:x+window_size] = clutter_density
 
     # Normalize the clutter density map
     clutter_density_normalized = clutter_density_map / 520
     
-    
     total_density = np.sum(clutter_density_normalized)
     # print(" total_density:", total_density)
     if total_density == 0:   ##to tackle if the total_density sum comes 0
         clutter_density_normalized = calculate_pixel_clutter_density(rgb_image, depth_image)
-
      
     return clutter_density_normalized
 
@@ -241,7 +232,7 @@ class NiryoRobotEnv(gym.Env):
         self.max_episode_steps = 50
 
         # Define radius for local clutter density calculation
-        self.local_clutter_radius = 30  # Adjust this value as needed(in pixels)
+        self.local_clutter_radius = 15  # Adjust this value as needed(in pixels)
 
         # Define image sizes
         img_height, img_width = 224, 224
@@ -363,17 +354,17 @@ class NiryoRobotEnv(gym.Env):
         rgb = image_bundle['rgb']
         depth = image_bundle['aligned_depth']
 
+        # Get the denormalised color image
+        denormalised_rgb = self.cam_data.get_rgb(rgb, False)
+
         # Get the camera data
         x, depth_image, denormalised_depth, rgb_img = self.cam_data.get_data(rgb=rgb, depth=depth)
 
         # Check if the target object is graspable
-        self.graspable = self.grasp_model.run_graspable(x, depth_image, denormalised_depth, rgb_img)
-
-        # Get the denormalised color image
-        color_image = self.cam_data.get_rgb(rgb, False)
+        self.graspable = self.grasp_model.run_graspable(x, depth_image, denormalised_depth, rgb_img, denormalised_rgb)
 
         # Convert to HSV and create mask for blue color
-        hsv_image = cv2.cvtColor(color_image, cv2.COLOR_RGB2HSV)
+        hsv_image = cv2.cvtColor(denormalised_rgb, cv2.COLOR_RGB2HSV)
         # Color range for shades of red
         lower_red_1 = np.array([0, 120, 70])
         upper_red_1 = np.array([10, 255, 255])
@@ -393,12 +384,14 @@ class NiryoRobotEnv(gym.Env):
         self.current_white_pixel_count = white_pixel_count
 
         # Calculate the centroid of the mask
-        num_labels, labels, stats, centroids = cv2.connectedComponentsWithStats(mask_image)
-        white_pixel_count = stats[:, cv2.CC_STAT_AREA].sum()  # Total white pixel count
-        self.centroid = centroids[0] if num_labels > 1 else np.array([-1, -1], dtype=np.int16)  # Handle invalid case
+        if white_pixel_count > 0:
+            M = cv2.moments(mask_image)
+            self.centroid = np.array([int(M["m10"] / M["m00"]), int(M["m01"] / M["m00"])], dtype=np.int16)
+        else:
+            self.centroid = np.array([-1, -1], dtype=np.int16)
 
         # Convert the color image to grayscale and normalise
-        gray_image = cv2.cvtColor(color_image, cv2.COLOR_RGB2GRAY)
+        gray_image = cv2.cvtColor(denormalised_rgb, cv2.COLOR_RGB2GRAY)
         gray_image_normalised = cv2.normalize(gray_image, None, 0, 1, cv2.NORM_MINMAX)  # Normalising the grayscaled normalised rgb image
         gray_image_normalised = gray_image_normalised.reshape(gray_image_normalised.shape[0], gray_image_normalised.shape[1], 1)
 
@@ -413,7 +406,7 @@ class NiryoRobotEnv(gym.Env):
             print(f'depth{depth_image.shape}')
 
         # Calculate the pixel clutter density
-        self.clutter_map = calculate_pixel_clutter_density(color_image, depth_image)
+        self.clutter_map = calculate_pixel_clutter_density(denormalised_rgb, denormalised_depth)
 
         # Calculate the global clutter density
         self.previous_global_clutter_density = self.current_global_clutter_density
@@ -468,6 +461,9 @@ class NiryoRobotEnv(gym.Env):
             # Log the exception and clear the collision detected flag
             rospy.logwarn(f"Exception occurred: {e}")
             niryo_robot.clear_collision_detected()
+
+            # Go to home position
+            res = go_to_home_position()
 
             # Penalize for the collision
             reward -= 2 #changed from 5 to 2
@@ -525,7 +521,7 @@ class NiryoRobotEnv(gym.Env):
             # Reward for varying clutter density
             if self.current_white_pixel_count == 0:
                 if self.previous_global_clutter_density and (self.current_global_clutter_density < self.previous_global_clutter_density):
-                    reward += 3.0
+                    reward += 2.0
                 elif self.previous_global_clutter_density and (self.current_global_clutter_density >= self.previous_global_clutter_density):
                     reward += -1.0
             else:
@@ -561,19 +557,19 @@ if __name__ == "__main__":
 
     logdir = "logs"
     # Set up SAC model with a specified buffer size
-    model = SAC("MultiInputPolicy", env, verbose=1, buffer_size=50000, tensorboard_log=logdir)  # Set buffer size here
+    model = SAC("MultiInputPolicy", env, verbose=1, buffer_size=5000, tensorboard_log=logdir)  # Set buffer size here
 
     # Set up a checkpoint callback to save the model periodically
-    checkpoint_callback = CheckpointCallback(save_freq=5000, save_path='./logs/', name_prefix='niryo_sac_model')
+    checkpoint_callback = CheckpointCallback(save_freq=1000, save_path='./logs/', name_prefix='niryo_sac_model')
 
     # Set up a TensorBoard callback
     # tensorboard_callback = TensorBoardCallback(log_dir='./logs/tensorboard/')
    
     # Train the model with the callbacks
-    total_timesteps = 100000
+    total_timesteps = 10000
     #model.learn(total_timesteps=total_timesteps, callback=[checkpoint_callback, tensorboard_callback])
     
-    model.learn(total_timesteps=total_timesteps, progress_bar=True, tb_log_name="SAC",callback=checkpoint_callback)
+    model.learn(total_timesteps=total_timesteps, progress_bar=True, tb_log_name="SAC_with_clutter",callback=checkpoint_callback)
 
     # Save the trained model
     model.save("niryo_sac_model")
