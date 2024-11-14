@@ -183,7 +183,7 @@ def calculate_pixel_clutter_density(rgb_image, depth_image):
     # Normalize the clutter density map
     clutter_density_normalized = clutter_density_map / 520
     
-    total_density = np.sum(clutter_density_normalized)
+    total_density = np.mean(clutter_density_normalized)
     # print(" total_density:", total_density)
     if total_density == 0:   ##to tackle if the total_density sum comes 0
         clutter_density_normalized = calculate_pixel_clutter_density(rgb_image, depth_image)
@@ -410,12 +410,12 @@ class NiryoRobotEnv(gym.Env):
 
         # Calculate the global clutter density
         self.previous_global_clutter_density = self.current_global_clutter_density
-        self.current_global_clutter_density = np.sum(self.clutter_map) # changed from mean to sum
+        self.current_global_clutter_density = np.mean(self.clutter_map) # changed from mean to sum
 
         # Calculate the local clutter density
         if self.centroid[0] != -1 and self.centroid[1] != -1:
             self.previous_local_clutter_density = self.current_local_clutter_density
-            self.current_local_clutter_density = np.sum(self.clutter_map[
+            self.current_local_clutter_density = np.mean(self.clutter_map[
                 min(max(0, int(self.centroid[1] - self.local_clutter_radius)), 224):min(max(0, int(self.centroid[1] + self.local_clutter_radius)), 224), 
                 min(max(0, int(self.centroid[0] - self.local_clutter_radius)), 224):min(max(0, int(self.centroid[0] + self.local_clutter_radius)), 224)])
 
@@ -518,6 +518,16 @@ class NiryoRobotEnv(gym.Env):
             elif self.previous_white_pixel_count and (self.current_white_pixel_count < self.previous_white_pixel_count):
                 reward += -1.0
 
+            #print("self.previous_global_clutter_density:",self.previous_global_clutter_density)
+            #print("self.current_global_clutter_density:",self.current_global_clutter_density)
+            #print("self.previous_local_clutter_density:",self.previous_local_clutter_density)
+            #print("self.current_local_clutter_density:",self.current_local_clutter_density)
+            #print("self.previous_white_pixel_count",self.previous_white_pixel_count)
+            
+            self.current_global_clutter_density = int(self.current_global_clutter_density  * 1000)
+            self.previous_global_clutter_density = int(self.previous_global_clutter_density * 1000)
+            self.current_local_clutter_density = int(self.current_local_clutter_density * 1000)
+            self.previous_local_clutter_density = int(self.previous_local_clutter_density * 1000)
             # Reward for varying clutter density
             if self.current_white_pixel_count == 0:
                 if self.previous_global_clutter_density and (self.current_global_clutter_density < self.previous_global_clutter_density):
