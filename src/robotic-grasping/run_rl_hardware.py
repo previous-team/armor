@@ -12,6 +12,7 @@ import torch.utils.data
 from hardware.armor_camera import RealSenseCamera
 from hardware.device import get_device
 from utils.data.camera_data import CameraData
+from run_rl_ml_hardware import Graspable
 
 
 
@@ -194,120 +195,119 @@ def calculate_pixel_clutter_density(rgb_image, depth_image):
 
 
 class NiryoController:
-      def __init__(self, model_path):
-        
-        
+    def __init__(self, model_path):
         # Parse the arguments
         self.args = parse_args()
         
         logging.info('Connecting to camera...')
-        cam = RealSenseCamera()
-        cam.connect()
-        cam_data = CameraData(include_depth=self.args.use_depth, include_rgb=self.args.use_rgb)
+        self.cam = RealSenseCamera()
+        self.cam.connect()
+        self.cam_data = CameraData()
         
-        # Load Network
-        logging.info('Loading model...')
-
-        if torch.cuda.is_available() and not self.args.force_cpu:
-            net = torch.load(self.args.network)
-        else:
-            net = torch.load(self.args.network, map_location=torch.device('cpu'))
-
-        #net = torch.load(args.network)
-        logging.info('Done')
-
-        # Get the compute device
-        device = get_device(self.args.force_cpu)
+    
+        # Initilaise the Model for Graspable
+        self.grasp_model = Graspable(network_path=self.args.network, force_cpu=self.args.force_cpu)
+        self.transformation_matrix = None 
+        
+        self.model = SAC.load(model_path)
         
         
-        def get_state(self):
         
+    def get_state(self):
         
-            # Ensure both color and depth images are available
+        # Ensure both color and depth images are available
+        image_bundle = self.cam.get_image_bundle()
+        while (image_bundle is None or 'rgb' not in image_bundle or 'aligned_depth' not in image_bundle):  # Wait for valid images
+            rospy.loginfo("Waiting for valid images...")
             image_bundle = self.cam.get_image_bundle()
-            while (image_bundle is None or 'rgb' not in image_bundle or 'aligned_depth' not in image_bundle):  # Wait for valid images
-                rospy.loginfo("Waiting for valid images...")
-                image_bundle = self.cam.get_image_bundle()
             
-            # Get the RGB and depth images
-            rgb = image_bundle['rgb']
-            depth = image_bundle['aligned_depth']
-            
-            depth_unexpanded = image_bundle['unexpanded_depth']
-
-            depth_frame = image_bundle['depth_frame']
-
-            # Get the camera data
-            x, depth_image, denormalised_depth, rgb_img = self.cam_data.get_data(rgb=rgb, depth=depth)
-
-            # Check if the target object is graspable
-            self.graspable = self.grasp_model.run_graspable(x, depth_image, denormalised_depth, rgb_img )
-
-            # Get the denormalised color image
-            color_image = self.cam_data.get_rgb(rgb, False)
-
-            # Convert to HSV and create mask for blue color
-            hsv_image = cv2.cvtColor(color_image, cv2.COLOR_RGB2HSV)
-            # Color range for shades of red
-            lower_red_1 = np.array([0, 120, 70])
-            upper_red_1 = np.array([10, 255, 255])
-            lower_red_2 = np.array([170, 120, 70])
-            upper_red_2 = np.array([180, 255, 255])
-
-            # Create a mask for the red color
-            mask1 = cv2.inRange(hsv_image, lower_red_1, upper_red_1)
-            mask2 = cv2.inRange(hsv_image, lower_red_2, upper_red_2)
-            mask_image = mask1 | mask2
-
-            # Calculate the number of white pixels in the mask
-            white_pixel_count = cv2.countNonZero(mask_image)
-   
-            # Calculate the centroid of the mask
-            num_labels, labels, stats, centroids = cv2.connectedComponentsWithStats(mask_image)
-            white_pixel_count = stats[:, cv2.CC_STAT_AREA].sum()  # Total white pixel count
-            self.centroid = centroids[0] if num_labels > 1 else np.array([-1.0, -1.0], dtype=np.float32)  # Handle invalid case
-
-            # Convert the color image to grayscale and normalise
-            gray_image = cv2.cvtColor(color_image,cv2.COLOR_RGB2GRAY)
-            gray_image_normalised = cv2.normalize(gray_image, None, 0, 255, cv2.NORM_MINMAX)  # Normalising the grayscaled normalised rgb image
-
-            # Normalise the depth image
-            min_abs, max_abs = 10, 100
-            depth_image = np.clip((denormalised_depth - min_abs) / (max_abs - min_abs), 0, 1)
-            depth_image = depth_image.squeeze()
-
-
-            # Calculate the pixel clutter density
-            self.clutter_map = calculate_pixel_clutter_density(color_image, depth_image)
-
-
-            # Return the state as a dictionary matching observation space
-            state = {
-                'gray': gray_image_normalised,
-                'depth': depth_image,  # Add channel dimension for depth
-                'white_pixel_count': np.array(self.current_white_pixel_count, dtype=np.int32),# Send number of white pixels and centroid coordinates
-                'centroid':np.array(self.centroid,dtype = np.float32),
-                'clutter_density': self.clutter_map
-            }
-
-            rospy.loginfo('New STATE registered')
-
-            
-            return state
+        # Get the RGB and depth images
+        rgb = image_bundle['rgb']
+        depth = image_bundle['aligned_depth']
+        depth_unexpanded = image_bundle['unexpanded_depth']
+        depth_frame = image_bundle['depth_frame']
         
-        def run(self):
-            rate = rospy.Rate(10)  # 10 Hz
-            print("In control loop")
-            while not rospy.is_shutdown():
-
-            
-                state = get_state()
-                action, _ = self.model.predict(state, deterministic=True)
-                print("predicted action is:",action)
-                push_along_line_from_action(action)
+        while self.transformation_matrix is None:
+            # Generate transformation matrix
+            self.transformation_matrix = self.grasp_model.aruco_marker_detect(rgb,self.cam.camera_matrix,self.cam.distortion_matrix)
             
 
-                rate.sleep()
+        # Get the camera data
+        x, depth_image, denormalised_depth, rgb_img = self.cam_data.get_data(rgb=rgb, depth=depth)
+
+        # Check if the target object is graspable
+        self.graspable = self.grasp_model.run_graspable(x, depth_image, denormalised_depth, rgb_img )
+        
+        if(len(self.grapsable)!=0):
+            res=self.grasp_model.pick(self.graspable,depth_frame,depth_unexpanded,self.transformation_matrix,self.cam.camera_matrix)
+
+        # Get the denormalised color image
+        color_image = self.cam_data.get_rgb(rgb, False)
+
+        # Convert to HSV and create mask for blue color
+        hsv_image = cv2.cvtColor(color_image, cv2.COLOR_RGB2HSV)
+        # Color range for shades of red
+        lower_red_1 = np.array([0, 120, 70])
+        upper_red_1 = np.array([10, 255, 255])
+        lower_red_2 = np.array([170, 120, 70])
+        upper_red_2 = np.array([180, 255, 255])
+
+        # Create a mask for the red color
+        mask1 = cv2.inRange(hsv_image, lower_red_1, upper_red_1)
+        mask2 = cv2.inRange(hsv_image, lower_red_2, upper_red_2)
+        mask_image = mask1 | mask2
+
+        # Calculate the number of white pixels in the mask
+        white_pixel_count = cv2.countNonZero(mask_image)
+   
+        # Calculate the centroid of the mask
+        num_labels, labels, stats, centroids = cv2.connectedComponentsWithStats(mask_image)
+        white_pixel_count = stats[:, cv2.CC_STAT_AREA].sum()  # Total white pixel count
+        self.centroid = centroids[0] if num_labels > 1 else np.array([-1.0, -1.0], dtype=np.float32)  # Handle invalid case
+
+        # Convert the color image to grayscale and normalise
+        gray_image = cv2.cvtColor(color_image,cv2.COLOR_RGB2GRAY)
+        gray_image_normalised = cv2.normalize(gray_image, None, 0, 255, cv2.NORM_MINMAX)  # Normalising the grayscaled normalised rgb image
+
+        # Normalise the depth image
+        min_abs, max_abs = 10, 100
+        depth_image = np.clip((denormalised_depth - min_abs) / (max_abs - min_abs), 0, 1)
+        depth_image = depth_image.squeeze()
+
+
+        # Calculate the pixel clutter density
+        self.clutter_map = calculate_pixel_clutter_density(color_image, depth_image)
+
+
+        # Return the state as a dictionary matching observation space
+        state = {
+            'gray': gray_image_normalised,
+            'depth': depth_image,  # Add channel dimension for depth
+            'white_pixel_count': np.array(white_pixel_count, dtype=np.int32),# Send number of white pixels and centroid coordinates
+            'centroid':np.array(self.centroid,dtype = np.float32),
+            'clutter_density': self.clutter_map
+        }
+
+        rospy.loginfo('New STATE registered')
+
+            
+        return state
+        
+        
+        
+    def run(self):
+        rate = rospy.Rate(10)  # 10 Hz
+        print("In control loop")
+        while not rospy.is_shutdown():
+
+            
+            state = self.get_state()
+            action, _ = self.model.predict(state, deterministic=True)
+            print("predicted action is:",action)
+            push_along_line_from_action(action)
+            
+
+            rate.sleep()
  
 
 
@@ -327,7 +327,7 @@ if __name__ == "__main__":
     niryo_robot.update_tool()
     
 
-    model_path = '/home/viticulture/catkin_ws/src/models/SAC'
+    model_path = '/home/archanaa/armor/capstone_armor/logs/niryo_sac_model_13000_steps'
     robot = NiryoController(model_path)
     print("main")
     robot.run()

@@ -32,6 +32,11 @@ def deproject_pixel_to_point(depth, pixel, intrinsics):
     y = (pixel[1] - intrinsics.ppy) * depth / intrinsics.fy
     return np.array([x, y, depth])
 
+def project_point_to_pixel(depth, point, intrinsics):
+    #x*fx/depth+ppx
+    pixel_x=(point[1]*intrinsics.fx/depth)+intrinsics.ppx
+    pixel_y=(point[0]*intrinsics.fy/depth)+intrinsics.ppy 
+    return pixel_x,pixel_y
 
 
 def draw_rectangle(center, angle, length, width):
@@ -112,42 +117,43 @@ def filter_grasps(grasps, img, depth_img, intrinsics, red_thresh=0, green_thresh
         # Check color thresholds
         if x:
             
-            center=[cx,cy]
-            center_depth = depth_img[0,cy, cx]
+            angles = np.linspace(0, 2 * np.pi, 16) # 16 angles for the rectangle
+            # Insert obtained angle from ML to the first index
+            angles = np.insert(angles, 0, g.angle)
             
-            center_position = deproject_pixel_to_point(center_depth,center, intrinsics)
-            
-            # Draw rectangle points
-            rect_points = draw_rectangle(center_position, g.angle, g.length, g.width)
-            # print("length:",g.length)
-            # print("width:",g.width)
-            print("Red rect points:",rect_points)
-            
-            # Check depth constraint
-            
-            #print("Center:",center_depth)
-            is_valid_grasp = True
-            
-            for x in range(0,len(rect_points)):
-                # Sample points from center to each rectangle corner
-                p1=rect_points[x]
-                p2=rect_points[(x+2)%4]
-                # print(p1)
-                # print(p2)
-                line_points = sample_points_along_line(p1, p2, num_depth_checks)
-                for pt in line_points:
-                    y,x = int(pt[0]), int(pt[1])
-                    #print(depth_img[y,x])
-                    #if 0 <= x < depth_img.shape[1] and 0 <= y < depth_img.shape[0]:
-                    if depth_img[0,y, x] <= center_depth:
-                        #print(y,x)
-                        is_valid_grasp = False
-                        print(is_valid_grasp)
-                        break
+           # Check if it is graspable at any angle
+            for angle in angles:
+                center=[cx,cy]
+                depth=depth_img[cy, cx]
+                center_position = deproject_pixel_to_point(depth, center, intrinsics)
+                # Draw rectangle points
+                rect_points = draw_rectangle(center_position, g.angle, g.length, g.width)
                 
-            
-            if is_valid_grasp:
-                filtered_grasps.append(g)
+                pixel_points=[]
+                for pt in rect_points:
+                    p_p=project_point_to_pixel(depth, pt, intrinsics)
+                    pixel_points.append(p_p)
+                
+                # Check depth constraint
+                center_depth = depth_img[cy, cx]
+                is_valid_grasp = True
+                
+                for x in range(0,len(rect_points)):
+                    # Sample points from center to each rectangle corner
+                    p1=pixel_points[x]
+                    p2=pixel_points[(x+2)%4]
+                    line_points = sample_points_along_line(p1, p2, num_depth_checks)
+                    for pt in line_points:
+                        y,x = int(pt[0]), int(pt[1])
+                        if (0 <= x < 224) and (0 <= y < 224) and depth_img[y, x] <= center_depth:
+                            is_valid_grasp = False
+                            break
+                    
+                
+                if is_valid_grasp:
+                    g.angle = angle  # Update the angle
+                    filtered_grasps.append(g)
+                    break
 
     return filtered_grasps
 
@@ -201,17 +207,9 @@ def parse_args():
     args = parser.parse_args()
     return args
 
-# ROS node
-rospy.init_node('realsense_object_pose_publisher')
-grasp_pub = rospy.Publisher('grasp_point', PoseStamped, queue_size=10)
-logging.info('Ros node initialized')
 
 
-aruco_dict = aruco.getPredefinedDictionary(aruco.DICT_4X4_50)
-aruco_params = aruco.DetectorParameters()
-detector = aruco.ArucoDetector(aruco_dict, aruco_params)
-marker_size = 0.104 #100mm
-transform_matrix = None
+
 
 
 def rotation_matrix_y(theta):
@@ -259,9 +257,9 @@ def transform_object_to_bot(object_in_camera_frame, transform_matrix):
     object_in_aruco_frame = object_in_aruco_frame_homogeneous[:3]
     return object_in_aruco_frame
 
-def detect_aruco(color_image,camera_matrix,distortion_matrix):
-    global marker_size
-    global transform_matrix
+def detect_aruco(color_image,camera_matrix,distortion_matrix,detector,marker_size):
+    #global marker_size
+    #global transform_matrix
     gray = cv2.cvtColor(color_image, cv2.COLOR_RGB2GRAY) #Cuz enable_stream reads it with rgb8 encoding
     corners, ids, _ = detector.detectMarkers(gray)
     if ids is not None and len(ids) > 0:
@@ -303,6 +301,14 @@ class Graspable:
 
         # Get the compute device
         self.device = get_device(force_cpu)
+        
+        self.grasp_pub = rospy.Publisher('grasp_point', PoseStamped, queue_size=10)
+
+        aruco_dict = aruco.getPredefinedDictionary(aruco.DICT_4X4_50)
+        aruco_params = aruco.DetectorParameters()
+        self.detector = aruco.ArucoDetector(aruco_dict, aruco_params)
+        self.marker_size = 0.104 #100mm
+    
 
     def run_graspable(self, x, depth_image, denormalised_depth, rgb_img):
         # Run the grasp detection logic
@@ -313,121 +319,69 @@ class Graspable:
             # Post-process the network output
             q_img, ang_img, width_img = post_process_output(pred['pos'], pred['cos'], pred['sin'], pred['width'])
             grasps = hardware_detect_grasps(rgb_img, denormalised_depth, q_img, ang_img, width_img=None, no_grasps=10)
-            # # Visualize the results
-            # fig = plt.figure(figsize=(10, 10))
-            # plot_results(fig=fig,
-            #              rgb_img=rgb_img,
-            #              depth_img=np.squeeze(denormalised_depth),
-            #              grasp_q_img=q_img,
-            #              grasp_angle_img=ang_img,
-            #              no_grasps=10,
-            #              grasp_width_img=width_img,
-            #              grasps=grasps)  
-        return bool(len(grasps))
+ 
+        return grasps
+    
+    def aruco_marker_detect(self, rgb, camera_matrix, distortion_matrix):
+        transform_matrix = self.detect_aruco(rgb, camera_matrix, distortion_matrix)
+        print("Transform matrix is generated")   
+        return transform_matrix
+
+    def detect_aruco(self, color_image, camera_matrix, distortion_matrix):
+        gray = cv2.cvtColor(color_image, cv2.COLOR_RGB2GRAY) # Enable stream reads it with rgb8 encoding
+        corners, ids, _ = self.detector.detectMarkers(gray)
+        transform_matrix = None  # Initialize in case no markers are detected
+
+        if ids is not None and len(ids) > 0:
+            color_image = aruco.drawDetectedMarkers(color_image, corners, ids)
+            rvecs, tvecs, _ = aruco.estimatePoseSingleMarkers(corners, self.marker_size, camera_matrix, distortion_matrix)
+            for i in range(len(ids)):
+                rvec = rvecs[i][0]
+                tvec = tvecs[i][0]
+                rot_matrix, _ = cv2.Rodrigues(rvec)
+                transform_matrix = np.eye(4)
+                transform_matrix[:3, :3] = rot_matrix
+                transform_matrix[:3, 3] = tvec.flatten()
+        
+        return transform_matrix
+        
+    
+    
+    def pick(self,grasp,depth_frame,depth_unexpanded,transform_matrix,camera_matrix):  
+        grasp_point_640 = (grasp.center[1]+208,grasp.center[0]+128)
+        grasp_angle = grasp.angle
+        
+ 
+        object_in_camera_frame = pose_value_with_depth_compensation(grasp_point_640, depth_frame, depth_unexpanded, camera_matrix)
+        if object_in_camera_frame is not None and transform_matrix is not None:
+            object_in_aruco_frame = transform_object_to_bot(object_in_camera_frame, transform_matrix)
+            T_x,T_y,T_z = -0.28, -0.0, 0 #wrt aruco frame
+            transform_bot = np.eye(4)
+            tranform_bot = aruco_transformation_matrix(T_x,T_y,T_z)
+            object_in_bot_frame = transform_object_to_bot(object_in_aruco_frame,tranform_bot)
+            print(f"Object in ArUco marker frame: {object_in_aruco_frame}")
+            print(f"Object in Bot frame: {object_in_bot_frame}")
+            print(f'Grasp angle:',math.degrees(grasp_angle))#Angle in radians
+
+            quaternion = quaternion_from_euler(0,0,grasp_angle)
+            rx,ry,rz = object_in_bot_frame
+
+            # Publish to ROS topic
+            grasp_msg = PoseStamped()
+            grasp_msg.header.stamp = rospy.Time.now()
+            grasp_msg.pose.position.x = rx
+            grasp_msg.pose.position.y = ry
+            grasp_msg.pose.position.z = rz
+            print(f'pose stamped:::{rx,ry,rz}')
+            # Orientation will be published later
+            grasp_msg.pose.orientation.x = quaternion[0]
+            grasp_msg.pose.orientation.y = quaternion[1]
+            grasp_msg.pose.orientation.z = quaternion[2]
+            grasp_msg.pose.orientation.w = quaternion[3]
+
+            self.grasp_pub.publish(grasp_msg)
+        return True 
+        
 
 
-if __name__ == '__main__':
-    args = parse_args()
 
-    # Connect to Camera
-    logging.info('Connecting to camera...')
-    cam = RealSenseCamera()
-    cam.connect()
-    cam_data = CameraData(include_depth=args.use_depth, include_rgb=args.use_rgb)
-
-    # Load Network
-    logging.info('Loading model...')
-
-    if torch.cuda.is_available() and not args.force_cpu:
-        net = torch.load(args.network)
-    else:
-        net = torch.load(args.network, map_location=torch.device('cpu'))
-
-    #net = torch.load(args.network)
-    logging.info('Done')
-
-    # Get the compute device
-    device = get_device(args.force_cpu)
-
-    try:
-        fig = plt.figure(figsize=(10, 10))
-        while True:
-            image_bundle = cam.get_image_bundle()
-
-            rgb = image_bundle['rgb'] #640X480
-
-            depth = image_bundle['aligned_depth'] 
-
-            depth_unexpanded = image_bundle['unexpanded_depth']
-
-            depth_frame = image_bundle['depth_frame']
-
-            if transform_matrix is None:
-                transform_matrix = detect_aruco(rgb,cam.camera_matrix,cam.distortion_matrix)
-                print("Transform matrix has to be generated")          
-            else:
-
-                x, depth_img, rgb_img = cam_data.get_data(rgb=rgb, depth=depth) #returns 224x224 rgb and depth images
-                
-                with torch.no_grad():
-                    xc = x.to(device)
-                    pred = net.predict(xc)
-
-                    print("pred:",pred)
-
-                    q_img, ang_img, width_img = post_process_output(pred['pos'], pred['cos'], pred['sin'], pred['width'])
-
-
-                    rgb_denorm=cam_data.get_rgb(rgb, False)
-                    grasps = hardware_detect_grasps(q_img, ang_img,depth_img,rgb_denorm,cam.intrinsics, width_img=None, no_grasps=10)
-                
-                    plot_results(fig=fig,
-                                 rgb_img=cam_data.get_rgb(rgb, False),
-                                 depth_img=np.squeeze(cam_data.get_depth(depth)),
-                                 grasp_q_img=q_img,
-                                 grasp_angle_img=ang_img,
-                                 no_grasps=args.n_grasps,
-                                 grasp_width_img=width_img,
-                                 grasps=grasps)
-
-                    for grasp in grasps:
-                        grasp_point_640 = (grasp.center[1]+208,grasp.center[0]+128)
-                        grasp_angle = grasp.angle
-                        object_in_camera_frame = pose_value_with_depth_compensation(grasp_point_640, depth_frame, depth_unexpanded, cam.intrinsics)
-                        if object_in_camera_frame is not None and transform_matrix is not None:
-                            object_in_aruco_frame = transform_object_to_bot(object_in_camera_frame, transform_matrix)
-                            T_x,T_y,T_z = -0.28, -0.0, 0 #wrt aruco frame
-                            transform_bot = np.eye(4)
-                            tranform_bot = aruco_transformation_matrix(T_x,T_y,T_z)
-                            object_in_bot_frame = transform_object_to_bot(object_in_aruco_frame,tranform_bot)
-                            print(f"Object in ArUco marker frame: {object_in_aruco_frame}")
-                            print(f"Object in Bot frame: {object_in_bot_frame}")
-                            print(f'Grasp angle:',math.degrees(grasp_angle))#Angle in radians
-
-                            quaternion = quaternion_from_euler(0,0,grasp_angle)
-                            rx,ry,rz = object_in_bot_frame
-
-                            # Publish to ROS topic
-                            grasp_msg = PoseStamped()
-                            grasp_msg.header.stamp = rospy.Time.now()
-                            grasp_msg.pose.position.x = rx
-                            grasp_msg.pose.position.y = ry
-                            grasp_msg.pose.position.z = rz
-                            print(f'pose stamped:::{rx,ry,rz}')
-                            # Orientation will be published later
-                            grasp_msg.pose.orientation.x = quaternion[0]
-                            grasp_msg.pose.orientation.y = quaternion[1]
-                            grasp_msg.pose.orientation.z = quaternion[2]
-                            grasp_msg.pose.orientation.w = quaternion[3]
-
-                            grasp_pub.publish(grasp_msg)
-                            logging.info("published to object_pose topic")
-
-    finally:
-        save_results(
-            rgb_img=cam_data.get_rgb(rgb, False),
-            depth_img=np.squeeze(cam_data.get_depth(depth)),
-            grasp_q_img=q_img,
-            grasp_angle_img=ang_img,
-            no_grasps=args.n_grasps,
-            grasp_width_img=width_img)
