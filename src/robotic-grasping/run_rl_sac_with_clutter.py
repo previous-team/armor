@@ -410,14 +410,14 @@ class NiryoRobotEnv(gym.Env):
 
         # Calculate the global clutter density
         self.previous_global_clutter_density = self.current_global_clutter_density
-        self.current_global_clutter_density = np.mean(self.clutter_map) # changed from mean to sum
+        self.current_global_clutter_density = int(np.mean(self.clutter_map) * 100) # changed from mean to sum
 
         # Calculate the local clutter density
         if self.centroid[0] != -1 and self.centroid[1] != -1:
             self.previous_local_clutter_density = self.current_local_clutter_density
-            self.current_local_clutter_density = np.mean(self.clutter_map[
+            self.current_local_clutter_density = int(np.mean(self.clutter_map[
                 min(max(0, int(self.centroid[1] - self.local_clutter_radius)), 224):min(max(0, int(self.centroid[1] + self.local_clutter_radius)), 224), 
-                min(max(0, int(self.centroid[0] - self.local_clutter_radius)), 224):min(max(0, int(self.centroid[0] + self.local_clutter_radius)), 224)])
+                min(max(0, int(self.centroid[0] - self.local_clutter_radius)), 224):min(max(0, int(self.centroid[0] + self.local_clutter_radius)), 224)]) * 100)
 
         # Convert clutter density to 3D array
         self.clutter_map = self.clutter_map.reshape(self.clutter_map.shape[0], self.clutter_map.shape[1], 1)
@@ -518,16 +518,6 @@ class NiryoRobotEnv(gym.Env):
             elif self.previous_white_pixel_count and (self.current_white_pixel_count < self.previous_white_pixel_count):
                 reward += -1.0
 
-            #print("self.previous_global_clutter_density:",self.previous_global_clutter_density)
-            #print("self.current_global_clutter_density:",self.current_global_clutter_density)
-            #print("self.previous_local_clutter_density:",self.previous_local_clutter_density)
-            #print("self.current_local_clutter_density:",self.current_local_clutter_density)
-            #print("self.previous_white_pixel_count",self.previous_white_pixel_count)
-            
-            self.current_global_clutter_density = int(self.current_global_clutter_density  * 1000)
-            self.previous_global_clutter_density = int(self.previous_global_clutter_density * 1000)
-            self.current_local_clutter_density = int(self.current_local_clutter_density * 1000)
-            self.previous_local_clutter_density = int(self.previous_local_clutter_density * 1000)
             # Reward for varying clutter density
             if self.current_white_pixel_count == 0:
                 if self.previous_global_clutter_density and (self.current_global_clutter_density < self.previous_global_clutter_density):
@@ -567,7 +557,7 @@ if __name__ == "__main__":
 
     logdir = "logs"
     # Set up SAC model with a specified buffer size
-    model = SAC("MultiInputPolicy", env, verbose=1, buffer_size=5000, tensorboard_log=logdir)  # Set buffer size here
+    model = SAC("MultiInputPolicy", env, verbose=1, buffer_size=10000, tensorboard_log=logdir)  # Set buffer size here
 
     # Set up a checkpoint callback to save the model periodically
     checkpoint_callback = CheckpointCallback(save_freq=1000, save_path='./logs/', name_prefix='niryo_sac_model')
