@@ -392,11 +392,11 @@ class NiryoRobotEnv(gym.Env):
 
         # Convert the color image to grayscale and normalise
         gray_image = cv2.cvtColor(denormalised_rgb, cv2.COLOR_RGB2GRAY)
-        gray_image_normalised = cv2.normalize(gray_image, None, 0, 1, cv2.NORM_MINMAX)  # Normalising the grayscaled normalised rgb image
+        gray_image_normalised = cv2.normalize(gray_image, None, 0, 1, cv2.NORM_MINMAX, dtype=cv2.CV_32F) # Normalise to 0-1
         gray_image_normalised = gray_image_normalised.reshape(gray_image_normalised.shape[0], gray_image_normalised.shape[1], 1)
 
         # Normalise the depth image
-        min_abs, max_abs = 10, 100
+        min_abs, max_abs = 100, 1000
         depth_image = np.clip((denormalised_depth - min_abs) / (max_abs - min_abs), 0, 1)
 
         depth_image = depth_image.reshape(depth_image.shape[0], depth_image.shape[1], 1)
