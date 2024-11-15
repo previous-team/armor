@@ -226,19 +226,20 @@ class NiryoController:
         depth = image_bundle['aligned_depth']
         depth_unexpanded = image_bundle['unexpanded_depth']
         depth_frame = image_bundle['depth_frame']
+
         
-        while self.transformation_matrix is None:
+        if self.transformation_matrix is None:
             # Generate transformation matrix
             self.transformation_matrix = self.grasp_model.aruco_marker_detect(rgb,self.cam.camera_matrix,self.cam.distortion_matrix)
             
 
         # Get the camera data
-        x, depth_image, denormalised_depth, rgb_img = self.cam_data.get_data(rgb=rgb, depth=depth)
+        x, depth_image, denormalised_depth, rgb_img_ml = self.cam_data.get_data(rgb=rgb, depth=depth)
 
         # Check if the target object is graspable
-        self.graspable = self.grasp_model.run_graspable(x, depth_image, denormalised_depth, rgb_img )
+        self.graspable = self.grasp_model.run_graspable(x, depth_image, denormalised_depth,self.cam_data.get_rgb(rgb,norm=False),self.cam.camera_matrix)
         
-        if(len(self.grapsable)!=0):
+        if(len(self.graspable)!=0):
             res=self.grasp_model.pick(self.graspable,depth_frame,depth_unexpanded,self.transformation_matrix,self.cam.camera_matrix)
 
         # Get the denormalised color image
@@ -263,7 +264,7 @@ class NiryoController:
         # Calculate the centroid of the mask
         num_labels, labels, stats, centroids = cv2.connectedComponentsWithStats(mask_image)
         white_pixel_count = stats[:, cv2.CC_STAT_AREA].sum()  # Total white pixel count
-        self.centroid = centroids[0] if num_labels > 1 else np.array([-1.0, -1.0], dtype=np.float32)  # Handle invalid case
+        self.centroid = centroids[1] if num_labels > 1 else np.array([-1.0, -1.0], dtype=np.float32)  # Handle invalid case
 
         # Convert the color image to grayscale and normalise
         gray_image = cv2.cvtColor(color_image,cv2.COLOR_RGB2GRAY)
@@ -272,7 +273,8 @@ class NiryoController:
         # Normalise the depth image
         min_abs, max_abs = 10, 100
         depth_image = np.clip((denormalised_depth - min_abs) / (max_abs - min_abs), 0, 1)
-        depth_image = depth_image.squeeze()
+        depth_image = depth_image.reshape(224,224,1)
+        print(depth_image.shape)
 
 
         # Calculate the pixel clutter density
@@ -281,9 +283,9 @@ class NiryoController:
 
         # Return the state as a dictionary matching observation space
         state = {
-            'gray': gray_image_normalised,
+            # 'gray': gray_image_normalised,
             'depth': depth_image,  # Add channel dimension for depth
-            'white_pixel_count': np.array(white_pixel_count, dtype=np.int32),# Send number of white pixels and centroid coordinates
+            'white_pixel_count': white_pixel_count,# Send number of white pixels and centroid coordinates
             'centroid':np.array(self.centroid,dtype = np.float32),
             'clutter_density': self.clutter_map
         }

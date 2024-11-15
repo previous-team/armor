@@ -310,7 +310,7 @@ class Graspable:
         self.marker_size = 0.104 #100mm
     
 
-    def run_graspable(self, x, depth_image, denormalised_depth, rgb_img):
+    def run_graspable(self, x, depth_image, denormalised_depth,rgb_img,intrinsics):
         # Run the grasp detection logic
         with torch.no_grad():
             xc = x.to(self.device)
@@ -318,7 +318,7 @@ class Graspable:
 
             # Post-process the network output
             q_img, ang_img, width_img = post_process_output(pred['pos'], pred['cos'], pred['sin'], pred['width'])
-            grasps = hardware_detect_grasps(rgb_img, denormalised_depth, q_img, ang_img, width_img=None, no_grasps=10)
+            grasps = hardware_detect_grasps(q_img, ang_img,denormalised_depth, rgb_img,intrinsics, width_img=None, no_grasps=10)
  
         return grasps
     
