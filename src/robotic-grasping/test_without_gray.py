@@ -3,6 +3,8 @@ import argparse
 import numpy as np
 import math
 import cv2
+from skimage.measure import shannon_entropy as entropy
+
 from niryo_robot_python_ros_wrapper import *
 from niryo_robot_utils import NiryoRosWrapperException
 from stable_baselines3 import SAC
@@ -82,8 +84,8 @@ def push_along_line_from_action(action, debug=False):
 
     real_theta_min, real_theta_max = -180, 180
     real_length_min, real_length_max = 0.1 * workspace_length, 0.5 * workspace_length  # Limit the min and max length proportional to the workspace length
-    if debug:
-        print(action)
+    # if debug:
+    #     print(action)
 
     # Denormalize each action dimension
     x = denormalize_action(action[0], real_x_min, real_x_max) # Range length = max_action_value - min_action_value
@@ -136,36 +138,24 @@ def calculate_pixel_clutter_density(rgb_image, depth_image):
     if rgb_image is None or depth_image is None:
         return None
         
-    # Apply edge detection
+
+    # Convert depth image to uint8 for edge detection
     depth_image = np.uint8(depth_image)
     edges = cv2.Canny(depth_image, 30, 100)
 
-    # Find contours in the image to detect objects
+    # Find contours in the image
     contours, _ = cv2.findContours(edges, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-        
-    # Initialize the list of objects
+
     objects = []
-
     for contour in contours:
-        # Calculate the bounding box of each object
         x, y, w, h = cv2.boundingRect(contour)
-
         centroid = (x + w // 2, y + h // 2)
-
-        # Find the corresponding depth of the object by averaging depth pixels within the bounding box
-        depth_region = depth_image[y:y+h, x:x+w]
-
-        # Calculate object size (approximated by bounding box area)
+        depth_region = depth_image[y:y + h, x:x + w]
         object_size = w * h
-            
-        # Append object position and depth
         objects.append((centroid, object_size))
-        
-    # Initialize clutter density map
-    clutter_density_map = np.zeros_like(depth_image, dtype=np.float32)
 
-    # Define window size
-    window_size = 5  # Adjust this value as needed
+    clutter_density_map = np.zeros_like(depth_image, dtype=np.float32)
+    window_size = 5
 
     def calculate_clutter_for_window(x, y):
         clutter_density = 0
@@ -174,21 +164,111 @@ def calculate_pixel_clutter_density(rgb_image, depth_image):
             clutter_density += (1 / (distance + 1e-5)) * object_size
         return clutter_density
 
-    # Calculate clutter density for each window
     for x in range(0, depth_image.shape[1], window_size):
         for y in range(0, depth_image.shape[0], window_size):
-            clutter_density = min(calculate_clutter_for_window(x, y), 520)  # Clip the clutter density values
-            clutter_density_map[y:y+window_size, x:x+window_size] = clutter_density
+            clutter_density = min(calculate_clutter_for_window(x, y), 520)
+            clutter_density_map[y:y + window_size, x:x + window_size] = clutter_density
 
-    # Normalize the clutter density map
     clutter_density_normalized = clutter_density_map / 520
-    
-    total_density = np.mean(clutter_density_normalized)
-    # print(" total_density:", total_density)
-    if total_density == 0:   ##to tackle if the total_density sum comes 0
-        clutter_density_normalized = calculate_pixel_clutter_density(rgb_image, depth_image)
-     
-    return clutter_density_normalized
+
+    # Calculate entropy-based clutter metric (flattening the map)
+    entropy_map = entropy(clutter_density_normalized)
+
+    # Calculate standard deviation of depths
+    std_dev_map = cv2.normalize(cv2.Laplacian(depth_image, cv2.CV_64F).var(axis=1), None, 0, 1, cv2.NORM_MINMAX)
+
+    # Ensure both maps have the same shape
+    if clutter_density_normalized.shape != std_dev_map.shape:
+        std_dev_map = cv2.resize(std_dev_map, (clutter_density_normalized.shape[1], clutter_density_normalized.shape[0]))
+
+    # Ensure both maps have the same type (float32)
+    clutter_density_normalized = np.float32(clutter_density_normalized)
+    std_dev_map = np.float32(std_dev_map)
+
+    # Combine maps for visualization
+    combined_map = cv2.addWeighted(clutter_density_normalized, 0.5, std_dev_map, 0.3, 0)
+    combined_map = cv2.addWeighted(combined_map, 0.7, entropy_map, 0.2, 0)
+
+    return combined_map
+
+########################different approach
+# from scipy.stats import entropy
+
+
+# def calculate_pixel_clutter_density(rgb_image, depth_image):
+#     '''
+#     Calculates a pixel-wise clutter density map with enhanced metrics.
+#     rgb_image: the RGB image
+#     depth_image: the depth image
+#     Returns a clutter density image normalized and adjusted by entropy and standard deviation.
+#     '''
+#     # Check if the images are valid
+#     if rgb_image is None or depth_image is None:
+#         return None
+        
+#     # Apply edge detection
+#     depth_image = np.uint8(depth_image)
+#     edges = cv2.Canny(depth_image, 30, 100)
+
+#     # Find contours in the image to detect objects
+#     contours, _ = cv2.findContours(edges, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        
+#     # Initialize the list of objects
+#     objects = []
+
+#     for contour in contours:
+#         # Calculate the bounding box of each object
+#         x, y, w, h = cv2.boundingRect(contour)
+#         centroid = (x + w // 2, y + h // 2)
+
+#         # Find the corresponding depth of the object by averaging depth pixels within the bounding box
+#         depth_region = depth_image[y:y+h, x:x+w]
+        
+#         # Calculate object size (approximated by bounding box area)
+#         object_size = w * h
+            
+#         # Append object position and depth
+#         objects.append((centroid, object_size))
+        
+#     # Initialize clutter density map
+#     clutter_density_map = np.zeros_like(depth_image, dtype=np.float32)
+
+#     # Define window size
+#     window_size = 5  # Adjust this value as needed
+
+#     def calculate_clutter_for_window(x, y):
+#         clutter_density = 0
+#         for other_centroid, object_size in objects:
+#             distance = np.linalg.norm(np.array((x, y)) - np.array(other_centroid))
+#             clutter_density += (1 / (distance + 1e-5)) * object_size
+#         return clutter_density
+
+#     # Calculate clutter density for each window
+#     for x in range(0, depth_image.shape[1], window_size):
+#         for y in range(0, depth_image.shape[0], window_size):
+#             clutter_density = min(calculate_clutter_for_window(x, y), 520)  # Clip the clutter density values
+#             clutter_density_map[y:y+window_size, x:x+window_size] = clutter_density
+
+#     # Normalize the clutter density map
+#     clutter_density_normalized = clutter_density_map / 520
+
+#     # Calculate entropy across the entire depth image
+#     depth_hist, _ = np.histogram(depth_image, bins=256, range=(0, 255), density=True)
+#     depth_entropy = entropy(depth_hist)
+
+#     # Calculate standard deviation of the depth image
+#     depth_std = np.std(depth_image)
+
+#     # Adjust the clutter density map using entropy and standard deviation
+#     adjustment_factor = depth_entropy / (depth_std + 1e-5)  # Avoid division by zero
+#     clutter_density_normalized *= adjustment_factor
+
+#     # Clip values to be between 0 and 1
+#     clutter_density_normalized = np.clip(clutter_density_normalized, 0, 1)
+
+#     return clutter_density_normalized
+
+
 
 
 # Define the custom Niryo environment
@@ -210,7 +290,7 @@ class NiryoRobotEnv(gym.Env):
         self.cam_data = CameraData()
 
         # Define the debug flag. WARNING: Setting to True will print hell lot of debug statements. My system almost ran out of space
-        self.debug = False
+        self.debug = True
 
         # Define variables for the environment
         self.done = False
@@ -218,7 +298,7 @@ class NiryoRobotEnv(gym.Env):
         self.previous_white_pixel_count = None
         self.current_white_pixel_count = None
         self.previous_global_clutter_density = None
-        self.curent_global_clutter_density = None
+        self.current_global_clutter_density = None
         self.previous_local_clutter_density = None
         self.current_local_clutter_density = None
         self.centroid = np.array([-1, -1], dtype=np.int16)
@@ -232,7 +312,7 @@ class NiryoRobotEnv(gym.Env):
         self.max_episode_steps = 50
 
         # Define radius for local clutter density calculation
-        self.local_clutter_radius = 15  # Adjust this value as needed(in pixels)
+        self.local_clutter_radius = 10  # Adjust this value as needed(in pixels)
 
         # Define image sizes
         img_height, img_width = 224, 224
@@ -341,8 +421,8 @@ class NiryoRobotEnv(gym.Env):
         return state
 
     def get_state(self):
-        if self.debug:
-            print('in state')
+        # if self.debug:
+        #     print('in state')
     
         # Ensure both color and depth images are available
         image_bundle = self.cam.get_image_bundle()
@@ -411,7 +491,7 @@ class NiryoRobotEnv(gym.Env):
 
         # Calculate the global clutter density
         self.previous_global_clutter_density = self.current_global_clutter_density
-        self.current_global_clutter_density = int(np.mean(self.clutter_map) * 100) # changed from mean to sum
+        self.current_global_clutter_density = int(np.sum(self.clutter_map) * 100) # changed from mean to sum
 
         
         print(f'Current global clutter density: {self.current_global_clutter_density}')
@@ -421,7 +501,7 @@ class NiryoRobotEnv(gym.Env):
             print(f'Previous local clutter density: {self.previous_local_clutter_density}')
             self.previous_local_clutter_density = self.current_local_clutter_density
             print(f'Current local clutter density: {self.current_local_clutter_density}')
-            self.current_local_clutter_density = int(np.mean(self.clutter_map[
+            self.current_local_clutter_density = int(np.sum(self.clutter_map[
                 min(max(0, int(self.centroid[1] - self.local_clutter_radius)), 224):min(max(0, int(self.centroid[1] + self.local_clutter_radius)), 224), 
                 min(max(0, int(self.centroid[0] - self.local_clutter_radius)), 224):min(max(0, int(self.centroid[0] + self.local_clutter_radius)), 224)]) * 100)
 
@@ -439,9 +519,7 @@ class NiryoRobotEnv(gym.Env):
 
         rospy.loginfo('New STATE registered')
 
-        if self.debug:
-            print(f"State: {state}")
-        
+
         return state
 
     def step(self, action):
