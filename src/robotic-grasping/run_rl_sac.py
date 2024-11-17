@@ -60,7 +60,8 @@ def go_to_home_position(debug=False):
     except NiryoRosWrapperException as e:
         print(f"Error occurred: {e}")
         niryo_robot.clear_collision_detected()
-        res = niryo_robot.move_joints(0, 0.5, -1.25, 0, 0, 0)
+        rospy.sleep(1)
+        res = go_to_home_position(debug=debug)
         if not res or res[0] != 1:
             print("Error moving to home position")
 
@@ -375,7 +376,7 @@ class NiryoRobotEnv(gym.Env):
             res = go_to_home_position()
 
             # Penalize for the collision
-            reward -= 2 #changed from 5 to 2
+            reward -= 5
         
         finally:
             # Get the new state
@@ -416,7 +417,7 @@ class NiryoRobotEnv(gym.Env):
 
         # Check if the target object is graspable
         if self.graspable:
-            reward += 10.0
+            reward += 25.0
             self.done = True
             rospy.loginfo(f"Ending episode as target object is graspable after actions taken by the bot")
 
@@ -424,7 +425,7 @@ class NiryoRobotEnv(gym.Env):
             # Reward for increasing white pixel count
             if self.previous_white_pixel_count and ((self.current_white_pixel_count - self.previous_white_pixel_count) > 10):
                 reward += 2.0
-            elif self.previous_white_pixel_count and (self.current_white_pixel_count - self.previous_white_pixel_count) < 10:
+            elif self.previous_white_pixel_count and (self.current_white_pixel_count - self.previous_white_pixel_count) <= 0:
                 reward += -1.0
             # elif self.previous_white_pixel_count and (self.current_white_pixel_count == self.previous_white_pixel_count):
             #     reward += -0.5
@@ -458,10 +459,10 @@ if __name__ == "__main__":
 
     logdir = "logs"
     # Set up SAC model with a specified buffer size
-    model = SAC("MultiInputPolicy", env, verbose=1, buffer_size=2000, tensorboard_log=logdir)  # Set buffer size here
+    model = SAC("MultiInputPolicy", env, verbose=1, buffer_size=25000, tensorboard_log=logdir)  # Set buffer size here
 
     # Set up a checkpoint callback to save the model periodically
-    checkpoint_callback = CheckpointCallback(save_freq=1000, save_path='./logs/', name_prefix='niryo_sac_model')
+    checkpoint_callback = CheckpointCallback(save_freq=1000, save_path='./logs/', name_prefix='niryo_sac_without_clutter')
 
     # Set up a TensorBoard callback
     # tensorboard_callback = TensorBoardCallback(log_dir='./logs/tensorboard/')
@@ -470,9 +471,9 @@ if __name__ == "__main__":
     total_timesteps = 5000
     #model.learn(total_timesteps=total_timesteps, callback=[checkpoint_callback, tensorboard_callback])
     
-    model.learn(total_timesteps=total_timesteps, tb_log_name="SAC", callback=checkpoint_callback)
+    model.learn(total_timesteps=total_timesteps, progress_bar=True, tb_log_name="SAC", callback=checkpoint_callback)
 
     # Save the trained model
-    model.save("niryo_sac_model")
+    model.save("niryo_sac_without_clutter")
     print(f"Training completed for {total_timesteps} time steps")
     

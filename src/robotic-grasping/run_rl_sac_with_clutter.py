@@ -60,7 +60,8 @@ def go_to_home_position(debug=False):
     except NiryoRosWrapperException as e:
         print(f"Error occurred: {e}")
         niryo_robot.clear_collision_detected()
-        res = niryo_robot.move_joints(0, 0.5, -1.25, 0, 0, 0)
+        rospy.sleep(1)
+        res = go_to_home_position(debug=debug)
         if not res or res[0] != 1:
             print("Error moving to home position")
 
@@ -560,7 +561,7 @@ if __name__ == "__main__":
     model = SAC("MultiInputPolicy", env, verbose=1, buffer_size=10000, tensorboard_log=logdir)  # Set buffer size here
 
     # Set up a checkpoint callback to save the model periodically
-    checkpoint_callback = CheckpointCallback(save_freq=1000, save_path='./logs/', name_prefix='niryo_sac_model')
+    checkpoint_callback = CheckpointCallback(save_freq=1000, save_path='./logs/', name_prefix='niryo_sac_with_clutter')
 
     # Set up a TensorBoard callback
     # tensorboard_callback = TensorBoardCallback(log_dir='./logs/tensorboard/')
@@ -572,6 +573,6 @@ if __name__ == "__main__":
     model.learn(total_timesteps=total_timesteps, progress_bar=True, tb_log_name="SAC_with_clutter",callback=checkpoint_callback)
 
     # Save the trained model
-    model.save("niryo_sac_model")
+    model.save("niryo_sac_with_clutter")
     print(f"Training completed for {total_timesteps} time steps")
     
