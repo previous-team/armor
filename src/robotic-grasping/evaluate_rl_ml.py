@@ -388,6 +388,7 @@ class Graspable:
             grasp_msg.pose.orientation.z = quaternion[2]
             grasp_msg.pose.orientation.w = quaternion[3]
 
+
             self.grasp_pub.publish(grasp_msg)
 
         return True
