@@ -13,6 +13,8 @@ from hardware.armor_camera import RealSenseCamera
 from hardware.device import get_device
 from utils.data.camera_data import CameraData
 from run_rl_ml_hardware import Graspable
+from run_rl_sac_with_clutter import NiryoRobotEnv
+from stable_baselines3.common.vec_env import DummyVecEnv
 
 
 
@@ -208,10 +210,11 @@ class NiryoController:
         # Initilaise the Model for Graspable
         self.grasp_model = Graspable(network_path=self.args.network, force_cpu=self.args.force_cpu)
         self.transformation_matrix = None 
-        
+        env = DummyVecEnv([lambda: NiryoRobotEnv()])
         self.model = SAC.load(model_path)
-        
-        
+        self.model.set_env(env)
+        print("Environment Observation Space:", env.observation_space)
+        print("Environment Action Space:", env.action_space)
         
     def get_state(self):
         
@@ -271,9 +274,9 @@ class NiryoController:
         gray_image_normalised = cv2.normalize(gray_image, None, 0, 255, cv2.NORM_MINMAX)  # Normalising the grayscaled normalised rgb image
 
         # Normalise the depth image
-        min_abs, max_abs = 10, 100
+        min_abs, max_abs = 100, 1000
         depth_image = np.clip((denormalised_depth - min_abs) / (max_abs - min_abs), 0, 1)
-        depth_image = depth_image.reshape(224,224,1)
+        depth_image = depth_image.reshape(depth_image.shape[0], depth_image.shape[1], 1)
         print(depth_image.shape)
 
 
@@ -283,7 +286,7 @@ class NiryoController:
 
         # Return the state as a dictionary matching observation space
         state = {
-            # 'gray': gray_image_normalised,
+            'gray': gray_image_normalised,
             'depth': depth_image,  # Add channel dimension for depth
             'white_pixel_count': white_pixel_count,# Send number of white pixels and centroid coordinates
             'centroid':np.array(self.centroid,dtype = np.float32),
@@ -304,9 +307,9 @@ class NiryoController:
 
             
             state = self.get_state()
-            action, _ = self.model.predict(state, deterministic=True)
+            action, _ = self.model.predict(state)
             print("predicted action is:",action)
-            push_along_line_from_action(action)
+            push_along_line_from_action(action[0])
             
 
             rate.sleep()
@@ -329,7 +332,7 @@ if __name__ == "__main__":
     niryo_robot.update_tool()
     
 
-    model_path = '/home/archanaa/armor/capstone_armor/logs/niryo_sac_model_13000_steps'
+    model_path = '/home/archanaa/armor/capstone_armor/logs/models/niryo_sac_model_7000_steps.zip'
     robot = NiryoController(model_path)
     print("main")
     robot.run()
