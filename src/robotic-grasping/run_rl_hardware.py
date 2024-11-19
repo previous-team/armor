@@ -231,19 +231,25 @@ class NiryoController:
         depth_frame = image_bundle['depth_frame']
 
         
-        if self.transformation_matrix is None:
+        while self.transformation_matrix is None:
             # Generate transformation matrix
+
             self.transformation_matrix = self.grasp_model.aruco_marker_detect(rgb,self.cam.camera_matrix,self.cam.distortion_matrix)
             
+            print("Transformation matrix generated.")
+            if self.transformation_matrix is not None:
+                # Wait for user input to continue
+                input("Press Enter to start prediction...")
+                break
 
         # Get the camera data
         x, depth_image, denormalised_depth, rgb_img_ml = self.cam_data.get_data(rgb=rgb, depth=depth)
 
         # Check if the target object is graspable
-        self.graspable = self.grasp_model.run_graspable(x, depth_image, denormalised_depth,self.cam_data.get_rgb(rgb,norm=False),self.cam.camera_matrix)
+        self.graspable = self.grasp_model.run_graspable(x, depth_image, denormalised_depth,self.cam_data.get_rgb(rgb,norm=False))
         
         if(len(self.graspable)!=0):
-            res=self.grasp_model.pick(self.graspable,depth_frame,depth_unexpanded,self.transformation_matrix,self.cam.camera_matrix)
+            res=self.grasp_model.pick(self.graspable,depth_frame,depth_unexpanded,self.transformation_matrix)
 
         # Get the denormalised color image
         color_image = self.cam_data.get_rgb(rgb, False)
@@ -271,7 +277,8 @@ class NiryoController:
 
         # Convert the color image to grayscale and normalise
         gray_image = cv2.cvtColor(color_image,cv2.COLOR_RGB2GRAY)
-        gray_image_normalised = cv2.normalize(gray_image, None, 0, 255, cv2.NORM_MINMAX)  # Normalising the grayscaled normalised rgb image
+        gray_image_normalised = cv2.normalize(gray_image, None, 0, 1, cv2.NORM_MINMAX, dtype=cv2.CV_32F)  # Normalising the grayscaled normalised rgb image
+        gray_image_normalised = gray_image_normalised.reshape(gray_image_normalised.shape[0], gray_image_normalised.shape[1], 1)
 
         # Normalise the depth image
         min_abs, max_abs = 100, 1000
@@ -288,7 +295,7 @@ class NiryoController:
         state = {
             'gray': gray_image_normalised,
             'depth': depth_image,  # Add channel dimension for depth
-            'white_pixel_count': white_pixel_count,# Send number of white pixels and centroid coordinates
+            'white_pixel_count': np.array(white_pixel_count, dtype=np.int32),# Send number of white pixels and centroid coordinates
             'centroid':np.array(self.centroid,dtype = np.float32),
             'clutter_density': self.clutter_map
         }
@@ -307,6 +314,7 @@ class NiryoController:
 
             
             state = self.get_state()
+            state = {key: np.expand_dims(value, axis=0) for key, value in state.items()}
             action, _ = self.model.predict(state)
             print("predicted action is:",action)
             push_along_line_from_action(action[0])
@@ -332,7 +340,7 @@ if __name__ == "__main__":
     niryo_robot.update_tool()
     
 
-    model_path = '/home/archanaa/armor/capstone_armor/logs/models/niryo_sac_model_7000_steps.zip'
+    model_path = "/home/sanraj/armor_ws/Model/niryo_sac_model_7000_steps.zip"
     robot = NiryoController(model_path)
     print("main")
     robot.run()

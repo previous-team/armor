@@ -27,15 +27,19 @@ import pyrealsense2 as rs
 
 logging.basicConfig(stream=sys.stdout,level=logging.INFO)
 
-def deproject_pixel_to_point(depth, pixel, intrinsics):
-    x = (pixel[0] - intrinsics.ppx) * depth / intrinsics.fx
-    y = (pixel[1] - intrinsics.ppy) * depth / intrinsics.fy
+intrinsics = None
+
+def deproject_pixel_to_point(depth, pixel):
+    global intrinsics 
+    x = (pixel[0] - intrinsics[0][0]) * depth / intrinsics[0][2]
+    y = (pixel[1] - intrinsics[1][1]) * depth / intrinsics[1][2]
     return np.array([x, y, depth])
 
-def project_point_to_pixel(depth, point, intrinsics):
+def project_point_to_pixel(depth, point):
     #x*fx/depth+ppx
-    pixel_x=(point[1]*intrinsics.fx/depth)+intrinsics.ppx
-    pixel_y=(point[0]*intrinsics.fy/depth)+intrinsics.ppy 
+    global intrinsics
+    pixel_x=(point[1]*intrinsics[0][2]/depth)+intrinsics[0][0]
+    pixel_y=(point[0]*intrinsics[1][2]/depth)+intrinsics[1][1]
     return pixel_x,pixel_y
 
 
@@ -95,7 +99,7 @@ def is_target_red(grasp_point, color_image ):
         # The point is not in a red region
         return False
 
-def filter_grasps(grasps, img, depth_img, intrinsics, red_thresh=0, green_thresh=-1, blue_thresh=-1, num_depth_checks=10):
+def filter_grasps(grasps, img, depth_img, red_thresh=0, green_thresh=-1, blue_thresh=-1, num_depth_checks=10):
     """
     Filter out grasps that are not on the object or obstructed by depth.
     :param grasps: list of Grasps
@@ -125,13 +129,13 @@ def filter_grasps(grasps, img, depth_img, intrinsics, red_thresh=0, green_thresh
             for angle in angles:
                 center=[cx,cy]
                 depth=depth_img[cy, cx]
-                center_position = deproject_pixel_to_point(depth, center, intrinsics)
+                center_position = deproject_pixel_to_point(depth, center)
                 # Draw rectangle points
                 rect_points = draw_rectangle(center_position, g.angle, g.length, g.width)
                 
                 pixel_points=[]
                 for pt in rect_points:
-                    p_p=project_point_to_pixel(depth, pt, intrinsics)
+                    p_p=project_point_to_pixel(depth, pt)
                     pixel_points.append(p_p)
                 
                 # Check depth constraint
@@ -157,7 +161,7 @@ def filter_grasps(grasps, img, depth_img, intrinsics, red_thresh=0, green_thresh
 
     return filtered_grasps
 
-def hardware_detect_grasps(q_img, ang_img,depth_img,rgb_img, intrinsics, width_img=None,no_grasps=1):
+def hardware_detect_grasps(q_img, ang_img,depth_img,rgb_img, width_img=None,no_grasps=1):
     """
     Detect grasps in a network output.
     :param q_img: Q image network output
@@ -180,14 +184,14 @@ def hardware_detect_grasps(q_img, ang_img,depth_img,rgb_img, intrinsics, width_i
         #print(f'grasp for 640x480: {grasp_point_640}')
         
         grasp_angle = ang_img[grasp_point_224]
-        g = Grasp(grasp_point_224, grasp_angle)
+        g = Grasp(grasp_point_640, grasp_angle)
         
         if width_img is not None:
             g.length = width_img[grasp_point_224]
             g.width = g.length / 2
         grasps.append(g)
         
-        filtered_grasps=filter_grasps(grasps, rgb_img, depth_img,intrinsics)
+        filtered_grasps=filter_grasps(grasps, rgb_img, depth_img)
         print("filtered grasps:",filtered_grasps)
     return filtered_grasps
 
@@ -206,10 +210,6 @@ def parse_args():
 
     args = parser.parse_args()
     return args
-
-
-
-
 
 
 def rotation_matrix_y(theta):
@@ -260,11 +260,13 @@ def transform_object_to_bot(object_in_camera_frame, transform_matrix):
 def detect_aruco(color_image,camera_matrix,distortion_matrix,detector,marker_size):
     #global marker_size
     #global transform_matrix
+    global intrinsics
+    intrinsics = camera_matrix
     gray = cv2.cvtColor(color_image, cv2.COLOR_RGB2GRAY) #Cuz enable_stream reads it with rgb8 encoding
     corners, ids, _ = detector.detectMarkers(gray)
     if ids is not None and len(ids) > 0:
         color_image = aruco.drawDetectedMarkers(color_image, corners, ids)
-        rvecs, tvecs, _ = aruco.estimatePoseSingleMarkers(corners, marker_size, camera_matrix, distortion_matrix)
+        rvecs, tvecs, _ = aruco.estimatePoseSingleMarkers(corners, marker_size,intrinsics, distortion_matrix)
         for i in range(len(ids)):
             rvec = rvecs[i][0]
             tvec = tvecs[i][0]
@@ -274,7 +276,8 @@ def detect_aruco(color_image,camera_matrix,distortion_matrix,detector,marker_siz
             transform_matrix[:3, 3] = tvec.flatten()
     return transform_matrix
 
-def pose_value_with_depth_compensation(grasp_point_640,depth_frame,depth_image,intrinsics):
+def pose_value_with_depth_compensation(grasp_point_640,depth_frame,depth_image):
+    global intrinsics
     cx = grasp_point_640[0]
     cy = grasp_point_640[1]
     depth_value = depth_frame.get_distance(cx, cy)
@@ -310,7 +313,7 @@ class Graspable:
         self.marker_size = 0.104 #100mm
     
 
-    def run_graspable(self, x, depth_image, denormalised_depth,rgb_img,intrinsics):
+    def run_graspable(self, x, depth_image, denormalised_depth,rgb_img):
         # Run the grasp detection logic
         with torch.no_grad():
             xc = x.to(self.device)
@@ -318,13 +321,14 @@ class Graspable:
 
             # Post-process the network output
             q_img, ang_img, width_img = post_process_output(pred['pos'], pred['cos'], pred['sin'], pred['width'])
-            grasps = hardware_detect_grasps(q_img, ang_img,denormalised_depth, rgb_img,intrinsics, width_img=None, no_grasps=10)
- 
+            grasps = hardware_detect_grasps(q_img, ang_img,denormalised_depth, rgb_img, width_img=None, no_grasps=10)
+            print(f"grasps{grasps}")
         return grasps
     
     def aruco_marker_detect(self, rgb, camera_matrix, distortion_matrix):
-        transform_matrix = self.detect_aruco(rgb, camera_matrix, distortion_matrix)
-        print("Transform matrix is generated")   
+        global intrinsics 
+        intrinsics = camera_matrix
+        transform_matrix = self.detect_aruco(rgb,intrinsics, distortion_matrix)   
         return transform_matrix
 
     def detect_aruco(self, color_image, camera_matrix, distortion_matrix):
@@ -347,12 +351,12 @@ class Graspable:
         
     
     
-    def pick(self,grasp,depth_frame,depth_unexpanded,transform_matrix,camera_matrix):  
-        grasp_point_640 = (grasp.center[1]+208,grasp.center[0]+128)
+    def pick(self,grasp,depth_frame,depth_unexpanded,transform_matrix):  
+        grasp_point_640 = grasp.center
         grasp_angle = grasp.angle
         
  
-        object_in_camera_frame = pose_value_with_depth_compensation(grasp_point_640, depth_frame, depth_unexpanded, camera_matrix)
+        object_in_camera_frame = pose_value_with_depth_compensation(grasp_point_640, depth_frame, depth_unexpanded)
         if object_in_camera_frame is not None and transform_matrix is not None:
             object_in_aruco_frame = transform_object_to_bot(object_in_camera_frame, transform_matrix)
             T_x,T_y,T_z = -0.28, -0.0, 0 #wrt aruco frame
