@@ -6,10 +6,9 @@ import cv2
 from niryo_robot_python_ros_wrapper import *
 from niryo_robot_utils import NiryoRosWrapperException
 from stable_baselines3 import SAC
-from stable_baselines3.common.buffers import ReplayBuffer
 from stable_baselines3.common.vec_env import DummyVecEnv
-from stable_baselines3.common.callbacks import CheckpointCallback, BaseCallback
-from stable_baselines3.common.monitor import Monitor
+from stable_baselines3.common.callbacks import CheckpointCallback
+
 
 from hardware.cam_gazebo import ROSCameraSubscriber
 from utils.data.camera_data_gazebo import CameraData
@@ -61,7 +60,8 @@ def go_to_home_position(debug=False):
     except NiryoRosWrapperException as e:
         print(f"Error occurred: {e}")
         niryo_robot.clear_collision_detected()
-        res = niryo_robot.move_joints(0, 0.5, -1.25, 0, 0, 0)
+        rospy.sleep(1)
+        res = go_to_home_position(debug=debug)
         if not res or res[0] != 1:
             print("Error moving to home position")
 
@@ -137,67 +137,58 @@ def calculate_pixel_clutter_density(rgb_image, depth_image):
     if rgb_image is None or depth_image is None:
         return None
         
-    # Convert the RGB image to grayscale and apply edge detection
-    gray = cv2.cvtColor(rgb_image, cv2.COLOR_BGR2GRAY)
-    blurred = cv2.GaussianBlur(gray, (5, 5), 0)
-    edges = cv2.Canny(blurred, 50, 150)
+    # Apply edge detection
+    depth_image = np.uint8(depth_image)
+    edges = cv2.Canny(depth_image, 30, 100)
 
     # Find contours in the image to detect objects
     contours, _ = cv2.findContours(edges, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
         
     # Initialize the list of objects
     objects = []
-    total_area = rgb_image.shape[0] * rgb_image.shape[1]  # Total image area
 
     for contour in contours:
         # Calculate the bounding box of each object
         x, y, w, h = cv2.boundingRect(contour)
-            
-        # Remove small objects (noise)
-        if w * h < 0.01 * total_area:
-            continue
 
         centroid = (x + w // 2, y + h // 2)
 
         # Find the corresponding depth of the object by averaging depth pixels within the bounding box
         depth_region = depth_image[y:y+h, x:x+w]
-        avg_depth = np.mean(depth_region)
 
         # Calculate object size (approximated by bounding box area)
         object_size = w * h
             
         # Append object position and depth
-        objects.append((centroid, avg_depth, object_size))
+        objects.append((centroid, object_size))
         
     # Initialize clutter density map
-    clutter_density_map = np.zeros_like(gray, dtype=np.float32)
+    clutter_density_map = np.zeros_like(depth_image, dtype=np.float32)
 
     # Define window size
     window_size = 5  # Adjust this value as needed
 
     def calculate_clutter_for_window(x, y):
         clutter_density = 0
-        for other_centroid, other_depth, object_size in objects:
+        for other_centroid, object_size in objects:
             distance = np.linalg.norm(np.array((x, y)) - np.array(other_centroid))
             clutter_density += (1 / (distance + 1e-5)) * object_size
         return clutter_density
 
     # Calculate clutter density for each window
-    for x in range(0, rgb_image.shape[1], window_size):
-        for y in range(0, rgb_image.shape[0], window_size):
-            clutter_density = min(calculate_clutter_for_window(x, y), 500)  # Clip the clutter density values
+    for x in range(0, depth_image.shape[1], window_size):
+        for y in range(0, depth_image.shape[0], window_size):
+            clutter_density = min(calculate_clutter_for_window(x, y), 520)  # Clip the clutter density values
             clutter_density_map[y:y+window_size, x:x+window_size] = clutter_density
 
     # Normalize the clutter density map
-    clutter_density_normalized = clutter_density_map / 500
+    clutter_density_normalized = clutter_density_map / 520
     
-    
-    total_density = np.sum(clutter_density_normalized)
+    total_density = np.mean(clutter_density_normalized)
     # print(" total_density:", total_density)
     if total_density == 0:   ##to tackle if the total_density sum comes 0
         clutter_density_normalized = calculate_pixel_clutter_density(rgb_image, depth_image)
-
-    
+     
     return clutter_density_normalized
 
 
@@ -225,13 +216,13 @@ class NiryoRobotEnv(gym.Env):
         # Define variables for the environment
         self.done = False
         self.graspable = None
-        self.previous_white_pixel_count = 0
-        self.current_white_pixel_count = 0
+        self.previous_white_pixel_count = None
+        self.current_white_pixel_count = None
         self.previous_global_clutter_density = None
         self.curent_global_clutter_density = None
         self.previous_local_clutter_density = None
         self.current_local_clutter_density = None
-        self.centroid = np.array([-1.0, -1.0], dtype=np.float32)
+        self.centroid = np.array([-1, -1], dtype=np.int16)
 
         # Episode tracking variables
         self.episode_count = 0
@@ -239,10 +230,10 @@ class NiryoRobotEnv(gym.Env):
         self.current_step = 0  # Initialize current step
 
         # Define the maximum number of steps per episode
-        self.max_episode_steps = 40
+        self.max_episode_steps = 50
 
         # Define radius for local clutter density calculation
-        self.local_clutter_radius = 30  # Adjust this value as needed(in pixels)
+        self.local_clutter_radius = 15  # Adjust this value as needed(in pixels)
 
         # Define image sizes
         img_height, img_width = 224, 224
@@ -260,8 +251,8 @@ class NiryoRobotEnv(gym.Env):
         white_pixel_count_high = img_height * img_width  # Maximum possible number of white pixels
 
         # Mask centroid: X and Y coordinates (floating-point values)
-        centroid_low = np.array([0, 0], dtype=np.float32)   # Lower bounds
-        centroid_high = np.array([224, 224], dtype=np.float32)
+        centroid_low = np.array([-1, -1], dtype=np.int16)   # Lower bounds
+        centroid_high = np.array([223, 223], dtype=np.int16)
 
         # Clutter density: 1 channel, values range from 0 to 1
         clutter_density_low = 0
@@ -269,11 +260,11 @@ class NiryoRobotEnv(gym.Env):
 
         # Observation space initialization
         self.observation_space = spaces.Dict({
-            'gray': spaces.Box(low=gray_low, high=gray_high, shape=(img_height, img_width), dtype=np.uint8), #grayscale image
-            'depth': spaces.Box(low=depth_low, high=depth_high, shape=(img_height, img_width), dtype=np.float32),
+            'gray': spaces.Box(low=gray_low, high=gray_high, shape=(img_height, img_width, 1), dtype=np.float32), #grayscale image
+            'depth': spaces.Box(low=depth_low, high=depth_high, shape=(img_height, img_width, 1), dtype=np.float32),
             'white_pixel_count': spaces.Box(low=white_pixel_count_low, high=white_pixel_count_high, shape=(1,), dtype=np.int32),
-            'centroid': spaces.Box(low=centroid_low, high=centroid_high, shape=(2,), dtype=np.float32),  # 2D centroid (X, Y)
-            'clutter_density': spaces.Box(low=clutter_density_low, high=clutter_density_high, shape=(img_height, img_width), dtype=np.float32)
+            'centroid': spaces.Box(low=centroid_low, high=centroid_high, shape=(2,), dtype=np.int16),  # 2D centroid (X, Y)
+            'clutter_density': spaces.Box(low=clutter_density_low, high=clutter_density_high, shape=(img_height, img_width, 1), dtype=np.float32)
         })
 
         # Initilaise the Model for Graspable
@@ -286,10 +277,10 @@ class NiryoRobotEnv(gym.Env):
         ymax_limit = 1.0
         zmin_limit = 0.0
         zmax_limit = 1.0
-        thetamin_limit = 0
-        thetamax_limit = 1 # scale it from -180 to 180
-        lenmin_limit = 0
-        lenmax_limit = 1
+        thetamin_limit = 0.0
+        thetamax_limit = 1.0 # scale it from -180 to 180
+        lenmin_limit = 0.0
+        lenmax_limit = 1.0
 
 
         # Define the action space: [x, y, z, theta, length]
@@ -312,13 +303,13 @@ class NiryoRobotEnv(gym.Env):
             # Reset the environment variables
             self.done = False
             self.graspable = None
-            self.previous_white_pixel_count = 0
-            self.current_white_pixel_count = 0
+            self.previous_white_pixel_count = None
+            self.current_white_pixel_count = None
             self.previous_global_clutter_density = None
             self.current_global_clutter_density = None
             self.previous_local_clutter_density = None
             self.current_local_clutter_density = None
-            self.centroid = np.array([-1.0, -1.0], dtype=np.float32)
+            self.centroid = np.array([-1, -1], dtype=np.int16)
 
             # Episode tracking variables
             self.current_episode_reward = 0
@@ -364,17 +355,17 @@ class NiryoRobotEnv(gym.Env):
         rgb = image_bundle['rgb']
         depth = image_bundle['aligned_depth']
 
+        # Get the denormalised color image
+        denormalised_rgb = self.cam_data.get_rgb(rgb, False)
+
         # Get the camera data
         x, depth_image, denormalised_depth, rgb_img = self.cam_data.get_data(rgb=rgb, depth=depth)
 
         # Check if the target object is graspable
-        self.graspable = self.grasp_model.run_graspable(x, depth_image, denormalised_depth, rgb_img )
-
-        # Get the denormalised color image
-        color_image = self.cam_data.get_rgb(rgb, False)
+        self.graspable = self.grasp_model.run_graspable(x, depth_image, denormalised_depth, rgb_img, denormalised_rgb)
 
         # Convert to HSV and create mask for blue color
-        hsv_image = cv2.cvtColor(color_image, cv2.COLOR_RGB2HSV)
+        hsv_image = cv2.cvtColor(denormalised_rgb, cv2.COLOR_RGB2HSV)
         # Color range for shades of red
         lower_red_1 = np.array([0, 120, 70])
         upper_red_1 = np.array([10, 255, 255])
@@ -394,43 +385,50 @@ class NiryoRobotEnv(gym.Env):
         self.current_white_pixel_count = white_pixel_count
 
         # Calculate the centroid of the mask
-        num_labels, labels, stats, centroids = cv2.connectedComponentsWithStats(mask_image)
-        white_pixel_count = stats[:, cv2.CC_STAT_AREA].sum()  # Total white pixel count
-        self.centroid = centroids[0] if num_labels > 1 else np.array([-1.0, -1.0], dtype=np.float32)  # Handle invalid case
+        if white_pixel_count > 0:
+            M = cv2.moments(mask_image)
+            self.centroid = np.array([int(M["m10"] / M["m00"]), int(M["m01"] / M["m00"])], dtype=np.int16)
+        else:
+            self.centroid = np.array([-1, -1], dtype=np.int16)
 
         # Convert the color image to grayscale and normalise
-        gray_image = cv2.cvtColor(color_image,cv2.COLOR_RGB2GRAY)
-        gray_image_normalised = cv2.normalize(gray_image, None, 0, 255, cv2.NORM_MINMAX)  # Normalising the grayscaled normalised rgb image
+        gray_image = cv2.cvtColor(denormalised_rgb, cv2.COLOR_RGB2GRAY)
+        gray_image_normalised = cv2.normalize(gray_image, None, 0, 1, cv2.NORM_MINMAX, dtype=cv2.CV_32F) # Normalise to 0-1
+        gray_image_normalised = gray_image_normalised.reshape(gray_image_normalised.shape[0], gray_image_normalised.shape[1], 1)
 
         # Normalise the depth image
-        min_abs, max_abs = 10, 100
+        min_abs, max_abs = 100, 1000
         depth_image = np.clip((denormalised_depth - min_abs) / (max_abs - min_abs), 0, 1)
-        depth_image = depth_image.squeeze()
+
+        depth_image = depth_image.reshape(depth_image.shape[0], depth_image.shape[1], 1)
 
         if self.debug:
             print(f'gray{gray_image_normalised.shape}')
             print(f'depth{depth_image.shape}')
 
         # Calculate the pixel clutter density
-        self.clutter_map = calculate_pixel_clutter_density(color_image, depth_image)
+        self.clutter_map = calculate_pixel_clutter_density(denormalised_rgb, denormalised_depth)
 
         # Calculate the global clutter density
         self.previous_global_clutter_density = self.current_global_clutter_density
-        self.current_global_clutter_density = np.sum(self.clutter_map) # changed from mean to sum
+        self.current_global_clutter_density = int(np.mean(self.clutter_map) * 100) # changed from mean to sum
 
         # Calculate the local clutter density
-        if self.centroid[0] != -1.0 and self.centroid[1] != -1.0:
+        if self.centroid[0] != -1 and self.centroid[1] != -1:
             self.previous_local_clutter_density = self.current_local_clutter_density
-            self.current_local_clutter_density = np.sum(self.clutter_map[
+            self.current_local_clutter_density = int(np.mean(self.clutter_map[
                 min(max(0, int(self.centroid[1] - self.local_clutter_radius)), 224):min(max(0, int(self.centroid[1] + self.local_clutter_radius)), 224), 
-                min(max(0, int(self.centroid[0] - self.local_clutter_radius)), 224):min(max(0, int(self.centroid[0] + self.local_clutter_radius)), 224)])
+                min(max(0, int(self.centroid[0] - self.local_clutter_radius)), 224):min(max(0, int(self.centroid[0] + self.local_clutter_radius)), 224)]) * 100)
+
+        # Convert clutter density to 3D array
+        self.clutter_map = self.clutter_map.reshape(self.clutter_map.shape[0], self.clutter_map.shape[1], 1)
 
         # Return the state as a dictionary matching observation space
         state = {
             'gray': gray_image_normalised,
             'depth': depth_image,  # Add channel dimension for depth
             'white_pixel_count': np.array(self.current_white_pixel_count, dtype=np.int32),# Send number of white pixels and centroid coordinates
-            'centroid':np.array(self.centroid,dtype = np.float32),
+            'centroid':np.array(self.centroid, dtype = np.float32),
             'clutter_density': self.clutter_map
         }
 
@@ -465,6 +463,9 @@ class NiryoRobotEnv(gym.Env):
             rospy.logwarn(f"Exception occurred: {e}")
             niryo_robot.clear_collision_detected()
 
+            # Go to home position
+            res = go_to_home_position()
+
             # Penalize for the collision
             reward -= 2 #changed from 5 to 2
         
@@ -473,7 +474,7 @@ class NiryoRobotEnv(gym.Env):
             state = self.get_state()
 
             # Compute the reward and check if the episode is done
-            computed_reward, self.done = self.compute_reward(state)
+            computed_reward, self.done = self.compute_reward()
 
             # Update the reward
             reward += computed_reward
@@ -497,7 +498,7 @@ class NiryoRobotEnv(gym.Env):
         return state, reward, self.done, info
 
 
-    def compute_reward(self, state):
+    def compute_reward(self):
         if self.debug:
             print('in reward')
         reward = 0.0
@@ -511,24 +512,24 @@ class NiryoRobotEnv(gym.Env):
             self.done = True
             rospy.loginfo(f"Ending episode as target object is graspable after actions taken by the bot")
         # Reward for varying white pixel count or clutter density if timestep > 1
-        if self.current_step > 1:
+        if self.current_step > 0:
             # Reward for increasing white pixel count
-            if self.current_white_pixel_count > self.previous_white_pixel_count:
+            if self.previous_white_pixel_count and ((self.current_white_pixel_count - self.previous_white_pixel_count) > 10):
                 reward += 2.0
-            elif self.current_white_pixel_count <= self.previous_white_pixel_count:
-                reward += -2.0
+            elif self.previous_white_pixel_count and (self.current_white_pixel_count < self.previous_white_pixel_count):
+                reward += -1.0
 
             # Reward for varying clutter density
             if self.current_white_pixel_count == 0:
                 if self.previous_global_clutter_density and (self.current_global_clutter_density < self.previous_global_clutter_density):
-                    reward += 3.0
+                    reward += 2.0
                 elif self.previous_global_clutter_density and (self.current_global_clutter_density >= self.previous_global_clutter_density):
-                    reward += -3.0
+                    reward += -1.0
             else:
                 if self.previous_local_clutter_density and (self.current_local_clutter_density < self.previous_local_clutter_density):
                     reward += 3.0
                 elif self.previous_local_clutter_density and (self.current_local_clutter_density >= self.previous_local_clutter_density):
-                    reward += -3.0
+                    reward += -1.0
         # Check if the episode has reached the maximum steps
         if self.current_step >= self.max_episode_steps:
             # reward += -5.0
@@ -557,10 +558,10 @@ if __name__ == "__main__":
 
     logdir = "logs"
     # Set up SAC model with a specified buffer size
-    model = SAC("MultiInputPolicy", env, verbose=1, buffer_size=5000, tensorboard_log=logdir)  # Set buffer size here
+    model = SAC("MultiInputPolicy", env, verbose=1, buffer_size=10000, tensorboard_log=logdir)  # Set buffer size here
 
     # Set up a checkpoint callback to save the model periodically
-    checkpoint_callback = CheckpointCallback(save_freq=2000, save_path='./logs/', name_prefix='niryo_sac_model')
+    checkpoint_callback = CheckpointCallback(save_freq=1000, save_path='./logs/', name_prefix='niryo_sac_with_clutter')
 
     # Set up a TensorBoard callback
     # tensorboard_callback = TensorBoardCallback(log_dir='./logs/tensorboard/')
@@ -569,9 +570,9 @@ if __name__ == "__main__":
     total_timesteps = 10000
     #model.learn(total_timesteps=total_timesteps, callback=[checkpoint_callback, tensorboard_callback])
     
-    model.learn(total_timesteps=total_timesteps, progress_bar=True, tb_log_name="SAC",callback=checkpoint_callback)
+    model.learn(total_timesteps=total_timesteps, progress_bar=True, tb_log_name="SAC_with_clutter",callback=checkpoint_callback)
 
     # Save the trained model
-    model.save("niryo_sac_model")
+    model.save("niryo_sac_with_clutter")
     print(f"Training completed for {total_timesteps} time steps")
     

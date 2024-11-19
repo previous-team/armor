@@ -320,6 +320,8 @@ class Graspable:
 
         # Get the compute device
         self.device = get_device(force_cpu)
+        
+        self.grasp_pub = rospy.Publisher('/grasp_point', PoseStamped, queue_size=10)
 
     def run_graspable(self, x, depth_image, denormalised_depth, rgb_img, denormalised_rgb):
         # Run the grasp detection logic
@@ -339,7 +341,54 @@ class Graspable:
                 grasps = filter_grasps([Grasp(center=target_centroid, angle=0)], rgb_img, denormalised_depth, 462.1379699707031, 462.1379699707031, 111, 111)
 
             
-        return bool(len(grasps))
+        return bool(len(grasps)) ,grasps
+    
+    def pick(self, grasps, depth):
+        for g in grasps:
+            fx = 462.1379699707031
+            fy = 462.1379699707031
+            ppx = 111
+            ppy = 111
+            
+            cy,cx = g.center  # Invert to reverse the transpose operation that is given to the network
+
+            g.angle = g.angle
+
+            print("Grasp angle: ", math.degrees(g.angle))
+                
+            quaternion = quaternion_from_euler(0, 0, g.angle) #rotation about the z-axis
+
+            z = depth[cy, cx]
 
 
 
+            object_position = deproject_pixel_to_point(z, (cx, cy), ppx, ppy, fx, fy)
+
+            # Create the camera pose
+            camera_pose = {
+                'position': np.array([0.3, 0, 0.55]),
+                'orientation': np.array([0.0000001, 1.57, -3.141591])  # Euler angles (roll, pitch, yaw)
+            }
+
+            # Convert the object position from the camera frame to the world frame
+            x, y, z = camera_to_world(object_position, camera_pose)
+
+            print("Grasp at: ", x, y, z)
+
+            # Publish the grasp point
+            grasp_msg = PoseStamped()
+            grasp_msg.header.stamp = rospy.Time.now()
+            grasp_msg.pose.position.x = x
+            grasp_msg.pose.position.y = y
+            grasp_msg.pose.position.z = z
+                
+            # Orientation will be published later
+            grasp_msg.pose.orientation.x = quaternion[0]
+            grasp_msg.pose.orientation.y = quaternion[1]
+            grasp_msg.pose.orientation.z = quaternion[2]
+            grasp_msg.pose.orientation.w = quaternion[3]
+
+
+            self.grasp_pub.publish(grasp_msg)
+
+        return True
