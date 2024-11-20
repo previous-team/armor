@@ -12,7 +12,7 @@ from stable_baselines3.common.callbacks import CheckpointCallback
 
 from hardware.cam_gazebo import ROSCameraSubscriber
 from utils.data.camera_data_gazebo import CameraData
-from run_rl_ml import Graspable
+from evaluate_rl_ml import Graspable
 from armor.srv import delete_and_spawn_models
 
 import gym
@@ -361,7 +361,9 @@ class NiryoRobotEnv(gym.Env):
         x, depth_image, denormalised_depth, rgb_img = self.cam_data.get_data(rgb=rgb, depth=depth)
 
         # Check if the target object is graspable
-        self.graspable = self.grasp_model.run_graspable(x, depth_image, denormalised_depth, rgb_img, denormalised_rgb)
+        self.graspable, self.grasps = self.grasp_model.run_graspable(x, depth_image, denormalised_depth, rgb_img, denormalised_rgb)
+        if self.graspable:
+            res = self.grasp_model.pick(niryo_robot, self.grasps, denormalised_depth)
 
         # Convert to HSV and create mask for blue color
         hsv_image = cv2.cvtColor(denormalised_rgb, cv2.COLOR_RGB2HSV)
@@ -554,7 +556,7 @@ if __name__ == "__main__":
     env = NiryoRobotEnv()
 
     # Load the trained model
-    model = SAC.load("niryo_sac_model")
+    model = SAC.load("your_model_path")
 
     # Test the model
     obs = env.reset()
