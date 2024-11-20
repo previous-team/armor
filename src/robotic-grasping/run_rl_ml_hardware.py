@@ -184,7 +184,7 @@ def hardware_detect_grasps(q_img, ang_img,depth_img,rgb_img, width_img=None,no_g
         #print(f'grasp for 640x480: {grasp_point_640}')
         
         grasp_angle = ang_img[grasp_point_224]
-        g = Grasp(grasp_point_640, grasp_angle)
+        g = Grasp(grasp_point_224, grasp_angle)
         
         if width_img is not None:
             g.length = width_img[grasp_point_224]

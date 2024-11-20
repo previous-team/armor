@@ -246,10 +246,10 @@ class NiryoController:
         x, depth_image, denormalised_depth, rgb_img_ml = self.cam_data.get_data(rgb=rgb, depth=depth)
 
         # Check if the target object is graspable
-        self.graspable = self.grasp_model.run_graspable(x, depth_image, denormalised_depth,self.cam_data.get_rgb(rgb,norm=False))
-        
-        if(len(self.graspable)!=0):
-            res=self.grasp_model.pick(self.graspable,depth_frame,depth_unexpanded,self.transformation_matrix)
+        graspable = self.grasp_model.run_graspable(x, depth_image, denormalised_depth,self.cam_data.get_rgb(rgb,norm=False))
+        self.graspable_length = len(graspable)
+        if(self.graspable_length!=0):
+            res=self.grasp_model.pick(graspable,depth_frame,depth_unexpanded,self.transformation_matrix)
 
         # Get the denormalised color image
         color_image = self.cam_data.get_rgb(rgb, False)
@@ -340,7 +340,7 @@ if __name__ == "__main__":
     niryo_robot.update_tool()
     
 
-    model_path = "/home/sanraj/armor_ws/Model/niryo_sac_model_7000_steps.zip"
+    model_path = "/home/archanaa/armor/capstone_armor/logs/models/niryo_sac_with_clutter.zip"
     robot = NiryoController(model_path)
     print("main")
     robot.run()
