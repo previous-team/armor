@@ -496,7 +496,7 @@ class NiryoRobotEnv(gym.Env):
                 'r': self.current_episode_reward,
                 'l': self.current_step  # or use the total steps taken in the episode
             }
-
+        print(f'Current episode reward : {self.current_episode_reward}')
 
         return state, reward, self.done, info
 
@@ -511,7 +511,7 @@ class NiryoRobotEnv(gym.Env):
 
         # Check if the target object is graspable
         if self.graspable:
-            reward += 15.0            
+            reward += 15.0
             self.done = True
             rospy.loginfo(f"Ending episode as target object is graspable after actions taken by the bot")
         # Reward for varying white pixel count or clutter density if timestep > 1
@@ -538,22 +538,19 @@ class NiryoRobotEnv(gym.Env):
             # reward += -5.0
             self.done = True
             rospy.loginfo("Ending episode as maximum steps reached")
-
+        print(f'Reward:  {reward} , Done:  {self.done}')
         return reward, self.done
 
-
-# Initialize the ROS environment and SAC model
 if __name__ == "__main__":
-    
-    rospy.init_node('niryo_rl_node', anonymous=True)
-    
-    
+    # Initialize ROS node
+    rospy.init_node('niryo_rl_test_node', anonymous=True)
+    # Connecting to the ROS Wrapper & calibrating if needed
     niryo_robot = NiryoRosWrapper() # type: ignore
     niryo_robot.calibrate_auto()
 
     # Update tool
     niryo_robot.update_tool()
- 
+    # Create an environment instance
     env = NiryoRobotEnv()
     model = SAC.load("/home/sanraj/armor_ws/Model/niryo_sac_model_7000_steps.zip")
 
