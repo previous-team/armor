@@ -246,10 +246,9 @@ class NiryoController:
         x, depth_image, denormalised_depth, rgb_img_ml = self.cam_data.get_data(rgb=rgb, depth=depth)
 
         # Check if the target object is graspable
-        graspable = self.grasp_model.run_graspable(x, depth_image, denormalised_depth,self.cam_data.get_rgb(rgb,norm=False))
-        self.graspable_length = len(graspable)
-        if(self.graspable_length!=0):
-            rx,ry,rz,grasp_angle=self.grasp_model.pick(graspable[0],depth_frame,depth_unexpanded,self.transformation_matrix)
+        self.graspable = self.grasp_model.run_graspable(x, depth_image, denormalised_depth,self.cam_data.get_rgb(rgb,norm=False))
+        if(len(self.graspable)!=0):
+            rx,ry,rz,grasp_angle=self.grasp_model.pick(self.graspable[0],depth_frame,depth_unexpanded,self.transformation_matrix)
             # Opening Gripper
             res = niryo_robot.release_with_tool()
             # Move to grasp pose
@@ -332,15 +331,13 @@ class NiryoController:
         rate = rospy.Rate(10)  # 10 Hz
         print("In control loop")
         while not rospy.is_shutdown():
-
-            
             state = self.get_state()
             state = {key: np.expand_dims(value, axis=0) for key, value in state.items()}
             action, _ = self.model.predict(state)
             print("predicted action is:",action)
-            push_along_line_from_action(action[0])
-            
-
+            if len(self.graspable) != 0:
+                push_along_line_from_action(action[0])
+                    
             rate.sleep()
  
 
