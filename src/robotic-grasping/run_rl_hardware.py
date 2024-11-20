@@ -113,12 +113,13 @@ def push_along_line_from_action(action, debug=False):
     if res[0] != 1:
         if debug:
             print("Error moving to the final position")
-        raise NiryoRosWrapperException("Error moving to the final position")
+        # raise NiryoRosWrapperException("Error moving to the final position")
+        res = go_to_home_position()
     if debug:
         print(f"Moved to the final position: final_x={final_x}, final_y={final_y}")
 
     # Return to home position
-    res = go_to_home_position()
+    
 
     return True
 
@@ -195,7 +196,6 @@ def calculate_pixel_clutter_density(rgb_image, depth_image):
     
     return clutter_density_normalized
 
-
 class NiryoController:
     def __init__(self, model_path):
         # Parse the arguments
@@ -249,7 +249,28 @@ class NiryoController:
         graspable = self.grasp_model.run_graspable(x, depth_image, denormalised_depth,self.cam_data.get_rgb(rgb,norm=False))
         self.graspable_length = len(graspable)
         if(self.graspable_length!=0):
-            res=self.grasp_model.pick(graspable,depth_frame,depth_unexpanded,self.transformation_matrix)
+            rx,ry,rz,grasp_angle=self.grasp_model.pick(graspable[0],depth_frame,depth_unexpanded,self.transformation_matrix)
+            # Opening Gripper
+            res = niryo_robot.release_with_tool()
+            # Move to grasp pose
+            res = niryo_robot.move_pose(rx,ry,max(rz,0.1), 0.0, 1.57, grasp_angle)
+            if res[0] != 1:
+                # raise NiryoRosWrapperException("Error moving to the final position")
+                res = go_to_home_position()
+            else:
+                # Picking
+                niryo_robot.grasp_with_tool()
+                rospy.sleep(1)
+                # Home postion
+                niryo_robot.move_joints(0, 0.5, -1.25, 0, 0, 0)
+                # Moving to place pose
+                niryo_robot.move_pose(0.0, 0.2, 0.2, 0.0, 1.57, 0)
+                # Placing !
+                niryo_robot.release_with_tool()
+                # Home postion
+                niryo_robot.move_joints(0, 0.5, -1.25, 0, 0, 0)
+
+
 
         # Get the denormalised color image
         color_image = self.cam_data.get_rgb(rgb, False)
@@ -340,7 +361,7 @@ if __name__ == "__main__":
     niryo_robot.update_tool()
     
 
-    model_path = "/home/archanaa/armor/capstone_armor/logs/models/niryo_sac_with_clutter.zip"
+    model_path = "/home/sanraj/armor_ws/Model/niryo_sac_model_7000_steps.zip"
     robot = NiryoController(model_path)
     print("main")
     robot.run()

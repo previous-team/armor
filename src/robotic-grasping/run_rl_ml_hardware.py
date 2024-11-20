@@ -29,17 +29,20 @@ logging.basicConfig(stream=sys.stdout,level=logging.INFO)
 
 intrinsics = None
 
+
 def deproject_pixel_to_point(depth, pixel):
     global intrinsics 
-    x = (pixel[0] - intrinsics[0][0]) * depth / intrinsics[0][2]
-    y = (pixel[1] - intrinsics[1][1]) * depth / intrinsics[1][2]
+    print(intrinsics)
+    x = (pixel[0] - intrinsics[0][2]) * depth / intrinsics[0][0]
+    y = (pixel[1] - intrinsics[1][2]) * depth / intrinsics[1][1]
     return np.array([x, y, depth])
 
 def project_point_to_pixel(depth, point):
     #x*fx/depth+ppx
     global intrinsics
-    pixel_x=(point[1]*intrinsics[0][2]/depth)+intrinsics[0][0]
-    pixel_y=(point[0]*intrinsics[1][2]/depth)+intrinsics[1][1]
+    print(intrinsics)
+    pixel_x=(point[1]*intrinsics[0][0]/depth)+intrinsics[0][2]
+    pixel_y=(point[0]*intrinsics[1][1]/depth)+intrinsics[1][2]
     return pixel_x,pixel_y
 
 
@@ -282,8 +285,8 @@ def pose_value_with_depth_compensation(grasp_point_640,depth_frame,depth_image):
     cy = grasp_point_640[1]
     depth_value = depth_frame.get_distance(cx, cy)
     #depth_value = depth_image[cy,cx]
-    x = (cx - intrinsics.ppx) / intrinsics.fx * depth_value
-    y = (cy - intrinsics.ppy) / intrinsics.fy * depth_value
+    x = (cx - intrinsics[0][2]) / intrinsics[0][0] * depth_value
+    y = (cy - intrinsics[1][2]) / intrinsics[1][1] * depth_value
     return [x,y,depth_value]
 
 
@@ -352,8 +355,12 @@ class Graspable:
     
     
     def pick(self,grasp,depth_frame,depth_unexpanded,transform_matrix):  
-        grasp_point_640 = grasp.center
+        grasp_point_224 = grasp.center
         grasp_angle = grasp.angle
+        crop_offset_x = 208  # (640 - 224) // 2
+        crop_offset_y = 128  # (480 - 224) // 2
+        grasp_point_640 = (grasp_point_224[1] + crop_offset_x, grasp_point_224[0] + crop_offset_y)
+        print(grasp_point_640,grasp_angle)
         
  
         object_in_camera_frame = pose_value_with_depth_compensation(grasp_point_640, depth_frame, depth_unexpanded)
@@ -370,21 +377,22 @@ class Graspable:
             quaternion = quaternion_from_euler(0,0,grasp_angle)
             rx,ry,rz = object_in_bot_frame
 
-            # Publish to ROS topic
-            grasp_msg = PoseStamped()
-            grasp_msg.header.stamp = rospy.Time.now()
-            grasp_msg.pose.position.x = rx
-            grasp_msg.pose.position.y = ry
-            grasp_msg.pose.position.z = rz
-            print(f'pose stamped:::{rx,ry,rz}')
+            # # Publish to ROS topic
+            # grasp_msg = PoseStamped()
+            # grasp_msg.header.stamp = rospy.Time.now()
+            # grasp_msg.pose.position.x = rx
+            # grasp_msg.pose.position.y = ry
+            # grasp_msg.pose.position.z = rz
+            # print(f'pose stamped:::{rx,ry,rz}')
+            
             # Orientation will be published later
-            grasp_msg.pose.orientation.x = quaternion[0]
-            grasp_msg.pose.orientation.y = quaternion[1]
-            grasp_msg.pose.orientation.z = quaternion[2]
-            grasp_msg.pose.orientation.w = quaternion[3]
+            # grasp_msg.pose.orientation.x = quaternion[0]
+            # grasp_msg.pose.orientation.y = quaternion[1]
+            # grasp_msg.pose.orientation.z = quaternion[2]
+            # grasp_msg.pose.orientation.w = quaternion[3]
 
-            self.grasp_pub.publish(grasp_msg)
-        return True 
+            # self.grasp_pub.publish(grasp_msg)
+        return rx,ry,rz,grasp_angle
         
 
 
