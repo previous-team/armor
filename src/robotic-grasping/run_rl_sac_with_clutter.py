@@ -233,7 +233,7 @@ class NiryoRobotEnv(gym.Env):
         self.max_episode_steps = 50
 
         # Define radius for local clutter density calculation
-        self.local_clutter_radius = 15  # Adjust this value as needed(in pixels)
+        self.local_clutter_radius = 20  # Adjust this value as needed(in pixels)
 
         # Define image sizes
         img_height, img_width = 224, 224
@@ -415,10 +415,15 @@ class NiryoRobotEnv(gym.Env):
 
         # Calculate the local clutter density
         if self.centroid[0] != -1 and self.centroid[1] != -1:
-            self.previous_local_clutter_density = self.current_local_clutter_density
-            self.current_local_clutter_density = int(np.mean(self.clutter_map[
+            local_depth_map=denormalised_depth[
                 min(max(0, int(self.centroid[1] - self.local_clutter_radius)), 224):min(max(0, int(self.centroid[1] + self.local_clutter_radius)), 224), 
-                min(max(0, int(self.centroid[0] - self.local_clutter_radius)), 224):min(max(0, int(self.centroid[0] + self.local_clutter_radius)), 224)]) * 100)
+                min(max(0, int(self.centroid[0] - self.local_clutter_radius)), 224):min(max(0, int(self.centroid[0] + self.local_clutter_radius)), 224)]
+            local_rgb_map=denormalised_rgb[
+                min(max(0, int(self.centroid[1] - self.local_clutter_radius)), 224):min(max(0, int(self.centroid[1] + self.local_clutter_radius)), 224), 
+                min(max(0, int(self.centroid[0] - self.local_clutter_radius)), 224):min(max(0, int(self.centroid[0] + self.local_clutter_radius)), 224)]
+            local_clutter_map = calculate_pixel_clutter_density(local_rgb_map, local_depth_map)
+            self.previous_local_clutter_density = self.current_local_clutter_density
+            self.current_local_clutter_density = int(np.mean(local_clutter_map) * 100)
 
         # Convert clutter density to 3D array
         self.clutter_map = self.clutter_map.reshape(self.clutter_map.shape[0], self.clutter_map.shape[1], 1)
