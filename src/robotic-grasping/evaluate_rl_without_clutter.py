@@ -10,8 +10,6 @@ from stable_baselines3.common.vec_env import DummyVecEnv
 from stable_baselines3.common.callbacks import CheckpointCallback
 
 
-
-
 from hardware.cam_gazebo import ROSCameraSubscriber
 from utils.data.camera_data_gazebo import CameraData
 from evaluate_rl_ml import Graspable
@@ -62,7 +60,8 @@ def go_to_home_position(debug=False):
     except NiryoRosWrapperException as e:
         print(f"Error occurred: {e}")
         niryo_robot.clear_collision_detected()
-        res = niryo_robot.move_joints(0, 0.5, -1.25, 0, 0, 0)
+        rospy.sleep(1)
+        res = go_to_home_position(debug=debug)
         if not res or res[0] != 1:
             print("Error moving to home position")
 
@@ -286,7 +285,7 @@ class NiryoRobotEnv(gym.Env):
         # Check if the target object is graspable
         self.graspable, self.grasps = self.grasp_model.run_graspable(x, depth_image, denormalised_depth, rgb_img, denormalised_rgb)
         if self.graspable:
-            res = self.grasp_model.pick(self.grasps,denormalised_depth)
+            res = self.grasp_model.pick(niryo_robot, self.grasps, denormalised_depth)
 
         # Convert to HSV and create mask for blue color
         hsv_image = cv2.cvtColor(denormalised_rgb, cv2.COLOR_RGB2HSV)
@@ -400,7 +399,7 @@ class NiryoRobotEnv(gym.Env):
                 'r': self.current_episode_reward,
                 'l': self.current_step  # or use the total steps taken in the episode
             }
-
+        print(f'Current episode reward : {self.current_episode_reward}')
 
         return state, reward, self.done, info
 
@@ -436,20 +435,20 @@ class NiryoRobotEnv(gym.Env):
         return reward, self.done
 
 
-# Initialize the ROS environment and SAC model
 if __name__ == "__main__":
-    
-    rospy.init_node('niryo_rl_node', anonymous=True)
-    
-    
+    # Initialize ROS node
+    rospy.init_node('niryo_rl_test_node', anonymous=True)
+
+    # Connecting to the ROS Wrapper & calibrating if needed
     niryo_robot = NiryoRosWrapper() # type: ignore
     niryo_robot.calibrate_auto()
 
     # Update tool
     niryo_robot.update_tool()
- 
+
+    # Create an environment instance
     env = NiryoRobotEnv()
-    model = SAC.load("/home/sanraj/armor_ws/Model/niryo_sac_model_7000_steps.zip")
+    model = SAC.load("path/to/saved/model")
 
     log_file = open('model_eval.txt', 'a')
 
@@ -457,10 +456,10 @@ if __name__ == "__main__":
 
     
     for episode in range(1, episodes + 1):
-        obs= env.reset()
+        obs = env.reset()
         done = False
-        episode_reward= 0
-        c=0
+        episode_reward = 0
+        c = 0
         
         while not done:
             print("New state")

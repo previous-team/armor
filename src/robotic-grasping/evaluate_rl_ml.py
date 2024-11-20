@@ -378,8 +378,13 @@ class Graspable:
            
             x, y, z = object_position
             print(x,y,z)
+
+            # Open the gripper
+            niryo_robot.release_with_tool()
+
+            # Move to the object
             niryo_robot.move_pose(x, y,max(z+0.07,0.09), 0.0, 1.57, g.angle)
-            rospy.sleep(2)
+
             # Picking
             niryo_robot.grasp_with_tool()
 
