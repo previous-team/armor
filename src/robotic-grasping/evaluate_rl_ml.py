@@ -343,7 +343,7 @@ class Graspable:
             
         return bool(len(grasps)) ,grasps
     
-    def pick(self, grasps, depth):
+    def pick(self, niryo_robot, grasps, depth):
         for g in grasps:
             fx = 462.1379699707031
             fy = 462.1379699707031
@@ -373,22 +373,25 @@ class Graspable:
             # Convert the object position from the camera frame to the world frame
             x, y, z = camera_to_world(object_position, camera_pose)
 
-            print("Grasp at: ", x, y, z)
+            object_position = np.array([x, y, z])
+            object_orientation= np.array([x, y, z, g.angle])
+           
+            x, y, z = object_position
+            print(x,y,z)
+            niryo_robot.move_pose(x, y,max(z+0.07,0.09), 0.0, 1.57, g.angle)
+            rospy.sleep(2)
+            # Picking
+            niryo_robot.grasp_with_tool()
 
-            # Publish the grasp point
-            grasp_msg = PoseStamped()
-            grasp_msg.header.stamp = rospy.Time.now()
-            grasp_msg.pose.position.x = x
-            grasp_msg.pose.position.y = y
-            grasp_msg.pose.position.z = z
-                
-            # Orientation will be published later
-            grasp_msg.pose.orientation.x = quaternion[0]
-            grasp_msg.pose.orientation.y = quaternion[1]
-            grasp_msg.pose.orientation.z = quaternion[2]
-            grasp_msg.pose.orientation.w = quaternion[3]
+            # Move back to home position
+            niryo_robot.move_joints(0, 0.5, -1.25, 0, 0, 0)   
 
+            # Moving to place pose
+            niryo_robot.move_pose(0.0, 0.2, 0.2, 0.0, 1.57, 0)
+            # Placing !
+            niryo_robot.release_with_tool()
 
-            self.grasp_pub.publish(grasp_msg)
+            # Home postion
+            niryo_robot.move_joints(0, 0.5, -1.25, 0, 0, 0)
 
         return True
