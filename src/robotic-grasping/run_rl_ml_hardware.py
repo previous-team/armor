@@ -293,6 +293,7 @@ def pose_value_with_depth_compensation(grasp_point_640,depth_frame,depth_image):
 class Graspable:
     def __init__(self, network_path, force_cpu=False):
         # Initialize necessary components and load the model
+        self.fig = plt.figure(figsize=(10, 10))
         self.force_cpu = force_cpu
         logging.info('Connecting to camera...')
 
@@ -325,6 +326,14 @@ class Graspable:
             # Post-process the network output
             q_img, ang_img, width_img = post_process_output(pred['pos'], pred['cos'], pred['sin'], pred['width'])
             grasps = hardware_detect_grasps(q_img, ang_img,denormalised_depth, rgb_img, width_img=None, no_grasps=10)
+            plot_results(fig=self.fig,
+                rgb_img=rgb_img,
+                depth_img=np.squeeze(depth_image),
+                grasp_q_img=q_img,
+                grasp_angle_img=ang_img,
+                no_grasps=1,
+                grasp_width_img=width_img,
+                grasps=grasps)
             print(f"grasps{grasps}")
         return grasps
     

@@ -7,15 +7,12 @@ import logging
 from niryo_robot_python_ros_wrapper import *
 from niryo_robot_utils import NiryoRosWrapperException
 from stable_baselines3 import SAC
-import torch.utils.data
 
 from hardware.armor_camera import RealSenseCamera
-from hardware.device import get_device
 from utils.data.camera_data import CameraData
 from run_rl_ml_hardware import Graspable
 from run_rl_sac_with_clutter import NiryoRobotEnv
 from stable_baselines3.common.vec_env import DummyVecEnv
-
 
 
 def parse_args():
@@ -91,7 +88,6 @@ def push_along_line_from_action(action, debug=False):
     if debug:
         print(f'Action denormalized: {x,y,z,theta,length}')
 
-
     # Go to home position
     res = go_to_home_position()
 
@@ -119,7 +115,7 @@ def push_along_line_from_action(action, debug=False):
         print(f"Moved to the final position: final_x={final_x}, final_y={final_y}")
 
     # Return to home position
-    
+    res = go_to_home_position()
 
     return True
 
@@ -187,12 +183,10 @@ def calculate_pixel_clutter_density(rgb_image, depth_image):
     # Normalize the clutter density map
     clutter_density_normalized = clutter_density_map / 500
     
-    
     total_density = np.sum(clutter_density_normalized)
     # print(" total_density:", total_density)
     if total_density == 0:   ##to tackle if the total_density sum comes 0
         clutter_density_normalized = calculate_pixel_clutter_density(rgb_image, depth_image)
-
     
     return clutter_density_normalized
 
@@ -205,19 +199,37 @@ class NiryoController:
         self.cam = RealSenseCamera()
         self.cam.connect()
         self.cam_data = CameraData()
-        
     
         # Initilaise the Model for Graspable
         self.grasp_model = Graspable(network_path=self.args.network, force_cpu=self.args.force_cpu)
-        self.transformation_matrix = None 
+        self.transformation_matrix = None
+        
+        # Initilaise the transformations
+        self.get_transforms()
+        
         env = DummyVecEnv([lambda: NiryoRobotEnv()])
         self.model = SAC.load(model_path)
         self.model.set_env(env)
         print("Environment Observation Space:", env.observation_space)
         print("Environment Action Space:", env.action_space)
         
-    def get_state(self):
+    def get_transforms(self):
+        while self.transformation_matrix is None:
+            # Ensure both color and depth images are available
+            image_bundle = self.cam.get_image_bundle()
+            while (image_bundle is None or 'rgb' not in image_bundle or 'aligned_depth' not in image_bundle):  # Wait for valid images
+                rospy.loginfo("Waiting for valid images...")
+                image_bundle = self.cam.get_image_bundle()
+                
+            # Get the RGB and depth images
+            rgb = image_bundle['rgb']
         
+            # Generate transformation matrix
+            print("Generating transformations")
+            self.transformation_matrix = self.grasp_model.aruco_marker_detect(rgb,self.cam.camera_matrix,self.cam.distortion_matrix)
+        
+        
+    def get_state(self):
         # Ensure both color and depth images are available
         image_bundle = self.cam.get_image_bundle()
         while (image_bundle is None or 'rgb' not in image_bundle or 'aligned_depth' not in image_bundle):  # Wait for valid images
@@ -230,29 +242,18 @@ class NiryoController:
         depth_unexpanded = image_bundle['unexpanded_depth']
         depth_frame = image_bundle['depth_frame']
 
-        
-        while self.transformation_matrix is None:
-            # Generate transformation matrix
-
-            self.transformation_matrix = self.grasp_model.aruco_marker_detect(rgb,self.cam.camera_matrix,self.cam.distortion_matrix)
-            
-            print("Transformation matrix generated.")
-            if self.transformation_matrix is not None:
-                # Wait for user input to continue
-                input("Press Enter to start prediction...")
-                break
-
         # Get the camera data
-        x, depth_image, denormalised_depth, rgb_img_ml = self.cam_data.get_data(rgb=rgb, depth=depth)
+        x, depth_image, denormalised_depth, _ = self.cam_data.get_data(rgb=rgb, depth=depth)
 
         # Check if the target object is graspable
         self.graspable = self.grasp_model.run_graspable(x, depth_image, denormalised_depth,self.cam_data.get_rgb(rgb,norm=False))
-        if(len(self.graspable)!=0):
+        if(len(self.graspable) != 0):
+            _ = go_to_home_position()
             rx,ry,rz,grasp_angle=self.grasp_model.pick(self.graspable[0],depth_frame,depth_unexpanded,self.transformation_matrix)
             # Opening Gripper
             res = niryo_robot.release_with_tool()
             # Move to grasp pose
-            res = niryo_robot.move_pose(rx,ry,max(rz,0.1), 0.0, 1.57, grasp_angle)
+            res = niryo_robot.move_pose(rx,ry,max(rz+0.07,0.1), 0.0, 1.57, grasp_angle)
             if res[0] != 1:
                 # raise NiryoRosWrapperException("Error moving to the final position")
                 res = go_to_home_position()
@@ -268,8 +269,6 @@ class NiryoController:
                 niryo_robot.release_with_tool()
                 # Home postion
                 niryo_robot.move_joints(0, 0.5, -1.25, 0, 0, 0)
-
-
 
         # Get the denormalised color image
         color_image = self.cam_data.get_rgb(rgb, False)
@@ -292,7 +291,6 @@ class NiryoController:
    
         # Calculate the centroid of the mask
         num_labels, labels, stats, centroids = cv2.connectedComponentsWithStats(mask_image)
-        white_pixel_count = stats[:, cv2.CC_STAT_AREA].sum()  # Total white pixel count
         self.centroid = centroids[1] if num_labels > 1 else np.array([-1.0, -1.0], dtype=np.float32)  # Handle invalid case
 
         # Convert the color image to grayscale and normalise
@@ -301,15 +299,12 @@ class NiryoController:
         gray_image_normalised = gray_image_normalised.reshape(gray_image_normalised.shape[0], gray_image_normalised.shape[1], 1)
 
         # Normalise the depth image
-        min_abs, max_abs = 100, 1000
+        min_abs, max_abs = 0.3, 10
         depth_image = np.clip((denormalised_depth - min_abs) / (max_abs - min_abs), 0, 1)
         depth_image = depth_image.reshape(depth_image.shape[0], depth_image.shape[1], 1)
-        print(depth_image.shape)
-
 
         # Calculate the pixel clutter density
         self.clutter_map = calculate_pixel_clutter_density(color_image, depth_image)
-
 
         # Return the state as a dictionary matching observation space
         state = {
@@ -322,27 +317,20 @@ class NiryoController:
 
         rospy.loginfo('New STATE registered')
 
-            
         return state
-        
-        
         
     def run(self):
         rate = rospy.Rate(10)  # 10 Hz
         print("In control loop")
+        input("Press Enter to start prediction...")
         while not rospy.is_shutdown():
             state = self.get_state()
             state = {key: np.expand_dims(value, axis=0) for key, value in state.items()}
             action, _ = self.model.predict(state)
             print("predicted action is:",action)
-            if len(self.graspable) != 0:
-                push_along_line_from_action(action[0])
-                    
+            if len(self.graspable) == 0:
+                res = push_along_line_from_action(action[0])        
             rate.sleep()
- 
-
-
-
 
 
 # Initialize the ROS environment and load SAC model
@@ -356,9 +344,8 @@ if __name__ == "__main__":
 
     # Update tool
     niryo_robot.update_tool()
-    
 
-    model_path = "/home/sanraj/armor_ws/Model/niryo_sac_model_7000_steps.zip"
+    model_path = "niryo_sac_with_clutter.zip"
     robot = NiryoController(model_path)
     print("main")
     robot.run()
