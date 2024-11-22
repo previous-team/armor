@@ -375,7 +375,8 @@ class Graspable:
         object_in_camera_frame = pose_value_with_depth_compensation(grasp_point_640, depth_frame, depth_unexpanded)
         if object_in_camera_frame is not None and transform_matrix is not None:
             object_in_aruco_frame = transform_object_to_bot(object_in_camera_frame, transform_matrix)
-            T_x,T_y,T_z = -0.28, -0.0, 0 #wrt aruco frame
+            # T_x,T_y,T_z = -0.2713160314996832, -0.006107923887425172, 0 #wrt aruco frame
+            T_x,T_y,T_z = -0.2713160314996832, -0.006107923887425172, 0 #wrt aruco frame
             transform_bot = np.eye(4)
             tranform_bot = aruco_transformation_matrix(T_x,T_y,T_z)
             object_in_bot_frame = transform_object_to_bot(object_in_aruco_frame,tranform_bot)
@@ -402,6 +403,22 @@ class Graspable:
 
             # self.grasp_pub.publish(grasp_msg)
         return rx,ry,rz,grasp_angle
+        
+    def send_limits(self, point,depth_frame,depth_unexpanded,transform_matrix):
+        grasp_point_224 = point
+        crop_offset_x = 208  # (640 - 224) // 2
+        crop_offset_y = 128  # (480 - 224) // 2
+        grasp_point_640 = (grasp_point_224[1] + crop_offset_x, grasp_point_224[0] + crop_offset_y)
+        
+        object_in_camera_frame = pose_value_with_depth_compensation(grasp_point_640, depth_frame, depth_unexpanded)
+        if object_in_camera_frame is not None and transform_matrix is not None:
+            object_in_aruco_frame = transform_object_to_bot(object_in_camera_frame, transform_matrix)
+            T_x,T_y,T_z = -0.2713160314996832, -0.006107923887425172, 0 #wrt aruco frame
+            transform_bot = np.eye(4)
+            tranform_bot = aruco_transformation_matrix(T_x,T_y,T_z)
+            object_in_bot_frame = transform_object_to_bot(object_in_aruco_frame,tranform_bot)
+            rx,ry,rz = object_in_bot_frame
+            return rx,ry
         
 
 

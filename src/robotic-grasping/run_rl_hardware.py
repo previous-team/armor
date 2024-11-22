@@ -59,7 +59,7 @@ def go_to_home_position(debug=False):
 
     return res
 
-def push_along_line_from_action(action, debug=False):
+def push_along_line_from_action(action,real_x_max,real_x_min,real_y_max,real_y_min,debug=False):
     '''
     Pushes the robot along a line, where the action vector defines the push.
     action: [x, y, theta, length] - the parameters learned by the RL agent.
@@ -67,9 +67,10 @@ def push_along_line_from_action(action, debug=False):
     '''
 
     # Define the real-world limits for each action dimension
-    real_x_min, real_x_max = 0.167, 0.432
-    real_y_min, real_y_max = -0.132, 0.132
+    # real_x_min, real_x_max = 0.167, 0.432
+    # real_y_min, real_y_max = -0.132, 0.132
     real_z_min, real_z_max = 0.0, 0.05 
+    print(real_x_max,real_x_min,real_y_max,real_y_min)
 
     workspace_length = min(real_x_max - real_x_min, real_y_max - real_y_min)
 
@@ -203,6 +204,7 @@ class NiryoController:
         # Initilaise the Model for Graspable
         self.grasp_model = Graspable(network_path=self.args.network, force_cpu=self.args.force_cpu)
         self.transformation_matrix = None
+        self.real_x_max ,self.real_x_min,self.real_y_max,self.real_y_min = None,None,None,None
         
         # Initilaise the transformations
         self.get_transforms()
@@ -223,11 +225,14 @@ class NiryoController:
                 
             # Get the RGB and depth images
             rgb = image_bundle['rgb']
+            depth_unexpanded = image_bundle['unexpanded_depth']
+            depth_frame = image_bundle['depth_frame']
         
             # Generate transformation matrix
             print("Generating transformations")
             self.transformation_matrix = self.grasp_model.aruco_marker_detect(rgb,self.cam.camera_matrix,self.cam.distortion_matrix)
-        
+        self.real_x_min,self.real_y_min = self.grasp_model.send_limits([0,0],depth_frame,depth_unexpanded,self.transformation_matrix)
+        self.real_x_max,self.real_y_max = self.grasp_model.send_limits([223,223],depth_frame,depth_unexpanded,self.transformation_matrix)
         
     def get_state(self):
         # Ensure both color and depth images are available
@@ -324,12 +329,12 @@ class NiryoController:
         print("In control loop")
         input("Press Enter to start prediction...")
         while not rospy.is_shutdown():
-            state = self.get_state()
+            state= self.get_state()
             state = {key: np.expand_dims(value, axis=0) for key, value in state.items()}
             action, _ = self.model.predict(state)
             print("predicted action is:",action)
             if len(self.graspable) == 0:
-                res = push_along_line_from_action(action[0])        
+                res = push_along_line_from_action(action[0], self.real_x_max, self.real_x_min, self.real_y_max, self.real_y_min)      
             rate.sleep()
 
 
@@ -345,7 +350,7 @@ if __name__ == "__main__":
     # Update tool
     niryo_robot.update_tool()
 
-    model_path = "niryo_sac_with_clutter.zip"
+    model_path = "/home/sanraj/armor_ws/src/niryo_sac_with_clutter.zip"
     robot = NiryoController(model_path)
     print("main")
     robot.run()
