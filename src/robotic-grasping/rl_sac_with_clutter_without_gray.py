@@ -19,8 +19,8 @@ import gym
 from gym import spaces
 from torch.utils.tensorboard import SummaryWriter
 
-# import os
-# os.environ['CUDA_LAUNCH_BLOCKING'] = '1'
+import os
+os.environ['CUDA_LAUNCH_BLOCKING'] = '1'
 
 def parse_args():
     '''
