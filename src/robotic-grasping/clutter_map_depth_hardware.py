@@ -4,6 +4,19 @@ import numpy as np
 
 class CameraSubscriber:
     def __init__(self):
+        
+        output_size = 224
+        width=640
+        height=480
+
+        left = (width - output_size) // 2
+        top = (height - output_size) // 2
+        right = (width + output_size) // 2
+        bottom = (height + output_size) // 2
+
+        self.bottom_right = (bottom, right)
+        self.top_left = (top, left)
+        
         # Initialize the Intel RealSense pipeline
         self.pipeline = rs.pipeline()
         self.config = rs.config()
@@ -36,10 +49,31 @@ class CameraSubscriber:
         color_image = np.asanyarray(color_frame.get_data())
 
         return depth_image, color_image
+    
+    def crop(self, img, top_left, bottom_right, resize=None):
+        """
+        Crop the image to a bounding box given by top left and bottom right pixels.
+        :param top_left: tuple, top left pixel.
+        :param bottom_right: tuple, bottom right pixel
+        :param resize: If specified, resize the cropped image to this size
+        """
+        img = img[top_left[0]:bottom_right[0], top_left[1]:bottom_right[1]]
+        return img
+    
+    def cropping(self,rgb_image,depth_image):
+
+        rgb_image = self.crop(rgb_image, bottom_right=self.bottom_right, top_left=self.top_left)
+        depth_image = self.crop(depth_image, bottom_right=self.bottom_right, top_left=self.top_left)
+        
+        return rgb_image,depth_image
+        
+        
+        
+        
 
 
     
-    def calculate_pixel_clutter_density(self, rgb_image, depth_image , window_size=40):
+    def calculate_pixel_clutter_density(self, rgb_image, depth_image , window_size=10):
         if rgb_image is None or depth_image is None:
             return None
         
@@ -47,7 +81,7 @@ class CameraSubscriber:
         # gray = cv2.cvtColor(self.rgb_image, cv2.COLOR_BGR2GRAY)
         
         # depth_image_normalized = cv2.normalize(depth_image, None, 0, 255, cv2.NORM_MINMAX).astype(np.uint8)
-        # smoothed_image = cv2.GaussianBlur(depth_image_normalized, (5, 5), 0)
+        smoothed_image = cv2.GaussianBlur(depth_image, (5, 5), 0)
 
         
         gray = depth_image.copy()
@@ -55,7 +89,7 @@ class CameraSubscriber:
         print("Max:", np.max(gray), "Min:", np.min(gray))
 
         # blurred = cv2.GaussianBlur(gray, (9, 9), 0)
-        edges = cv2.Canny(gray, 70, 100)
+        edges = cv2.Canny(gray, 30, 150)
 
         # Find contours in the image to detect objects
         contours, _ = cv2.findContours(edges, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
@@ -92,7 +126,7 @@ class CameraSubscriber:
         clutter_density_map = np.zeros_like(gray, dtype=np.float32)
 
         # Define window size
-        window_size = 30  # Adjust this value as needed
+        window_size = 10  # Adjust this value as needed
 
         def calculate_clutter_for_window(x, y):
             clutter_density = 0
@@ -111,6 +145,7 @@ class CameraSubscriber:
 
     def display_images(self):
         depth_image, rgb_image = self.get_images()
+        rgb_image,depth_image = self.cropping(rgb_image,depth_image)
 
         if depth_image is not None and rgb_image is not None:
             # Normalize depth image for display
