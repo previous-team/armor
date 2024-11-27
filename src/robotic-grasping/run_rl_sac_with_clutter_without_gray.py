@@ -512,7 +512,7 @@ class NiryoRobotEnv(gym.Env):
 
         # Check if the target object is graspable
         if self.graspable:
-            reward += 15.0
+            reward += 25.0
             self.done = True
             rospy.loginfo(f"Ending episode as target object is graspable after actions taken by the bot")
         # Reward for varying white pixel count or clutter density if timestep > 1
@@ -533,7 +533,7 @@ class NiryoRobotEnv(gym.Env):
                 if self.previous_local_clutter_density and (self.current_local_clutter_density < self.previous_local_clutter_density):
                     reward += 3.0
                 elif self.previous_local_clutter_density and (self.current_local_clutter_density >= self.previous_local_clutter_density):
-                    reward += -1.0
+                    reward += -2.0
         # Check if the episode has reached the maximum steps
         if self.current_step >= self.max_episode_steps:
             # reward += -5.0
@@ -565,16 +565,16 @@ if __name__ == "__main__":
     model = SAC("MultiInputPolicy", env, verbose=1, buffer_size=50000, tensorboard_log=logdir)  # Set buffer size here
 
     # Set up a checkpoint callback to save the model periodically
-    checkpoint_callback = CheckpointCallback(save_freq=1000, save_path='./logs/', name_prefix='niryo_sac_with_clutter')
+    checkpoint_callback = CheckpointCallback(save_freq=1000, save_path='./logs/', name_prefix='niryo_sac_without_gray')
 
     # Set up a TensorBoard callback
     # tensorboard_callback = TensorBoardCallback(log_dir='./logs/tensorboard/')
    
     # Train the model with the callbacks
-    total_timesteps = 10000
+    total_timesteps = 5000
     #model.learn(total_timesteps=total_timesteps, callback=[checkpoint_callback, tensorboard_callback])
     
-    model.learn(total_timesteps=total_timesteps, progress_bar=True, tb_log_name="SAC_with_clutter",callback=checkpoint_callback)
+    model.learn(total_timesteps=total_timesteps, progress_bar=True, tb_log_name="SAC_without_gray", callback=checkpoint_callback)
 
     # Save the trained model
     model.save("niryo_sac_with_clutter")
