@@ -563,7 +563,7 @@ if __name__ == "__main__":
 
     log_file = open('model_eval.txt', 'a')  # TODO: Change the name as model{number}_eval.txt
 
-    episodes = 10
+    episodes = 50
 
     
     for episode in range(1, episodes + 1):
