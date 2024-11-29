@@ -127,7 +127,7 @@ def push_along_line_from_action(action, debug=False):
 
     return True
 
-def calculate_pixel_clutter_density(rgb_image, depth_image):
+def calculate_pixel_clutter_density(rgb_image, depth_image, local=False):
     '''
     Calculates the pixel clutter density in the image.
     rgb_image: the RGB image
@@ -184,9 +184,8 @@ def calculate_pixel_clutter_density(rgb_image, depth_image):
     # Normalize the clutter density map
     clutter_density_normalized = clutter_density_map / 520
     
-    total_density = np.mean(clutter_density_normalized)
-    # print(" total_density:", total_density)
-    if total_density == 0:   ##to tackle if the total_density sum comes 0
+    total_density = np.sum(clutter_density_normalized)
+    if not local and total_density == 0:   # To handle if the total_density sum comes 0 in global clutter density
         clutter_density_normalized = calculate_pixel_clutter_density(rgb_image, depth_image)
      
     return clutter_density_normalized
@@ -233,7 +232,7 @@ class NiryoRobotEnv(gym.Env):
         self.max_episode_steps = 50
 
         # Define radius for local clutter density calculation
-        self.local_clutter_radius = 20  # Adjust this value as needed(in pixels)
+        self.local_clutter_radius = 50  # Adjust this value as needed(in pixels)
 
         # Define image sizes
         img_height, img_width = 224, 224
@@ -421,7 +420,8 @@ class NiryoRobotEnv(gym.Env):
             local_rgb_map=denormalised_rgb[
                 min(max(0, int(self.centroid[1] - self.local_clutter_radius)), 224):min(max(0, int(self.centroid[1] + self.local_clutter_radius)), 224), 
                 min(max(0, int(self.centroid[0] - self.local_clutter_radius)), 224):min(max(0, int(self.centroid[0] + self.local_clutter_radius)), 224)]
-            local_clutter_map = calculate_pixel_clutter_density(local_rgb_map, local_depth_map)
+
+            local_clutter_map = calculate_pixel_clutter_density(local_rgb_map, local_depth_map, local=True)
             self.previous_local_clutter_density = self.current_local_clutter_density
             self.current_local_clutter_density = int(np.mean(local_clutter_map) * 100)
 
@@ -563,7 +563,7 @@ if __name__ == "__main__":
 
     logdir = "logs"
     # Set up SAC model with a specified buffer size
-    model = SAC("MultiInputPolicy", env, verbose=1, buffer_size=10000, tensorboard_log=logdir)  # Set buffer size here
+    model = SAC("MultiInputPolicy", env, verbose=1, buffer_size=50000, tensorboard_log=logdir)  # Set buffer size here
 
     # Set up a checkpoint callback to save the model periodically
     checkpoint_callback = CheckpointCallback(save_freq=1000, save_path='./logs/', name_prefix='niryo_sac_with_clutter')

@@ -12,7 +12,7 @@ from stable_baselines3.common.callbacks import CheckpointCallback
 
 from hardware.cam_gazebo import ROSCameraSubscriber
 from utils.data.camera_data_gazebo import CameraData
-from run_rl_ml import Graspable
+from evaluate_rl_ml import Graspable
 from armor.srv import delete_and_spawn_models
 
 import gym
@@ -60,7 +60,8 @@ def go_to_home_position(debug=False):
     except NiryoRosWrapperException as e:
         print(f"Error occurred: {e}")
         niryo_robot.clear_collision_detected()
-        res = niryo_robot.move_joints(0, 0.5, -1.25, 0, 0, 0)
+        rospy.sleep(1)
+        res = go_to_home_position(debug=debug)
         if not res or res[0] != 1:
             print("Error moving to home position")
 
@@ -126,7 +127,7 @@ def push_along_line_from_action(action, debug=False):
 
     return True
 
-def calculate_pixel_clutter_density(rgb_image, depth_image):
+def calculate_pixel_clutter_density(rgb_image, depth_image, local=False):
     '''
     Calculates the pixel clutter density in the image.
     rgb_image: the RGB image
@@ -183,9 +184,8 @@ def calculate_pixel_clutter_density(rgb_image, depth_image):
     # Normalize the clutter density map
     clutter_density_normalized = clutter_density_map / 520
     
-    total_density = np.mean(clutter_density_normalized)
-    # print(" total_density:", total_density)
-    if total_density == 0:   ##to tackle if the total_density sum comes 0
+    total_density = np.sum(clutter_density_normalized)
+    if not local and total_density == 0:   # To handle if the total_density sum comes 0 in global clutter density
         clutter_density_normalized = calculate_pixel_clutter_density(rgb_image, depth_image)
      
     return clutter_density_normalized
@@ -232,7 +232,7 @@ class NiryoRobotEnv(gym.Env):
         self.max_episode_steps = 50
 
         # Define radius for local clutter density calculation
-        self.local_clutter_radius = 15  # Adjust this value as needed(in pixels)
+        self.local_clutter_radius = 50  # Adjust this value as needed(in pixels)
 
         # Define image sizes
         img_height, img_width = 224, 224
@@ -259,7 +259,7 @@ class NiryoRobotEnv(gym.Env):
 
         # Observation space initialization
         self.observation_space = spaces.Dict({
-            # 'gray': spaces.Box(low=gray_low, high=gray_high, shape=(img_height, img_width, 1), dtype=np.float32), #grayscale image
+            'gray': spaces.Box(low=gray_low, high=gray_high, shape=(img_height, img_width, 1), dtype=np.float32), #grayscale image
             'depth': spaces.Box(low=depth_low, high=depth_high, shape=(img_height, img_width, 1), dtype=np.float32),
             'white_pixel_count': spaces.Box(low=white_pixel_count_low, high=white_pixel_count_high, shape=(1,), dtype=np.int32),
             'centroid': spaces.Box(low=centroid_low, high=centroid_high, shape=(2,), dtype=np.int16),  # 2D centroid (X, Y)
@@ -361,7 +361,9 @@ class NiryoRobotEnv(gym.Env):
         x, depth_image, denormalised_depth, rgb_img = self.cam_data.get_data(rgb=rgb, depth=depth)
 
         # Check if the target object is graspable
-        self.graspable = self.grasp_model.run_graspable(x, depth_image, denormalised_depth, rgb_img, denormalised_rgb)
+        self.graspable, self.grasps = self.grasp_model.run_graspable(x, depth_image, denormalised_depth, rgb_img, denormalised_rgb)
+        if self.graspable:
+            res = self.grasp_model.pick(niryo_robot, self.grasps, denormalised_depth)
 
         # Convert to HSV and create mask for blue color
         hsv_image = cv2.cvtColor(denormalised_rgb, cv2.COLOR_RGB2HSV)
@@ -392,11 +394,11 @@ class NiryoRobotEnv(gym.Env):
 
         # Convert the color image to grayscale and normalise
         gray_image = cv2.cvtColor(denormalised_rgb, cv2.COLOR_RGB2GRAY)
-        gray_image_normalised = cv2.normalize(gray_image, None, 0, 1, cv2.NORM_MINMAX)  # Normalising the grayscaled normalised rgb image
+        gray_image_normalised = cv2.normalize(gray_image, None, 0, 1, cv2.NORM_MINMAX, dtype=cv2.CV_32F) # Normalise to 0-1
         gray_image_normalised = gray_image_normalised.reshape(gray_image_normalised.shape[0], gray_image_normalised.shape[1], 1)
 
         # Normalise the depth image
-        min_abs, max_abs = 10, 100
+        min_abs, max_abs = 100, 1000
         depth_image = np.clip((denormalised_depth - min_abs) / (max_abs - min_abs), 0, 1)
 
         depth_image = depth_image.reshape(depth_image.shape[0], depth_image.shape[1], 1)
@@ -404,7 +406,6 @@ class NiryoRobotEnv(gym.Env):
         if self.debug:
             print(f'gray{gray_image_normalised.shape}')
             print(f'depth{depth_image.shape}')
-        print(f'Previous global clutter density: {self.previous_global_clutter_density}')
 
         # Calculate the pixel clutter density
         self.clutter_map = calculate_pixel_clutter_density(denormalised_rgb, denormalised_depth)
@@ -413,24 +414,24 @@ class NiryoRobotEnv(gym.Env):
         self.previous_global_clutter_density = self.current_global_clutter_density
         self.current_global_clutter_density = int(np.mean(self.clutter_map) * 100) # changed from mean to sum
 
-        
-        print(f'Current global clutter density: {self.current_global_clutter_density}')
-       
         # Calculate the local clutter density
         if self.centroid[0] != -1 and self.centroid[1] != -1:
-            print(f'Previous local clutter density: {self.previous_local_clutter_density}')
-            self.previous_local_clutter_density = self.current_local_clutter_density
-            print(f'Current local clutter density: {self.current_local_clutter_density}')
-            self.current_local_clutter_density = int(np.mean(self.clutter_map[
+            local_depth_map=denormalised_depth[
                 min(max(0, int(self.centroid[1] - self.local_clutter_radius)), 224):min(max(0, int(self.centroid[1] + self.local_clutter_radius)), 224), 
-                min(max(0, int(self.centroid[0] - self.local_clutter_radius)), 224):min(max(0, int(self.centroid[0] + self.local_clutter_radius)), 224)]) * 100)
+                min(max(0, int(self.centroid[0] - self.local_clutter_radius)), 224):min(max(0, int(self.centroid[0] + self.local_clutter_radius)), 224)]
+            local_rgb_map=denormalised_rgb[
+                min(max(0, int(self.centroid[1] - self.local_clutter_radius)), 224):min(max(0, int(self.centroid[1] + self.local_clutter_radius)), 224), 
+                min(max(0, int(self.centroid[0] - self.local_clutter_radius)), 224):min(max(0, int(self.centroid[0] + self.local_clutter_radius)), 224)]
+            local_clutter_map = calculate_pixel_clutter_density(local_rgb_map, local_depth_map, local=True)
+            self.previous_local_clutter_density = self.current_local_clutter_density
+            self.current_local_clutter_density = int(np.mean(local_clutter_map) * 100)
 
         # Convert clutter density to 3D array
         self.clutter_map = self.clutter_map.reshape(self.clutter_map.shape[0], self.clutter_map.shape[1], 1)
 
         # Return the state as a dictionary matching observation space
         state = {
-            # 'gray': gray_image_normalised,
+            'gray': gray_image_normalised,
             'depth': depth_image,  # Add channel dimension for depth
             'white_pixel_count': np.array(self.current_white_pixel_count, dtype=np.int32),# Send number of white pixels and centroid coordinates
             'centroid':np.array(self.centroid, dtype = np.float32),
@@ -543,12 +544,11 @@ class NiryoRobotEnv(gym.Env):
 
         print(f'Reward:  {reward} , Done:  {self.done}')
         return reward, self.done
+    
 
-
-# Initialize the ROS environment and SAC model
 if __name__ == "__main__":
     # Initialize ROS node
-    rospy.init_node('niryo_rl_node', anonymous=True)
+    rospy.init_node('niryo_rl_test_node', anonymous=True)
 
     # Connecting to the ROS Wrapper & calibrating if needed
     niryo_robot = NiryoRosWrapper() # type: ignore
@@ -558,26 +558,32 @@ if __name__ == "__main__":
     niryo_robot.update_tool()
 
     # Create an environment instance
-    env = DummyVecEnv([lambda: NiryoRobotEnv()])
-    # env = Monitor(env, filename=None, allow_early_resets=True)
+    env = NiryoRobotEnv()
+    model = SAC.load("/path/to/saved/model")
 
-    logdir = "logs"
-    # Set up SAC model with a specified buffer size
-    model = SAC("MultiInputPolicy", env, verbose=1, buffer_size=10000, tensorboard_log=logdir)  # Set buffer size here
+    log_file = open('model_eval.txt', 'a')  # TODO: Change the name as model{number}_eval.txt
 
-    # Set up a checkpoint callback to save the model periodically
-    checkpoint_callback = CheckpointCallback(save_freq=1000, save_path='./logs/', name_prefix='niryo_sac_model')
+    episodes = 50
 
-    # Set up a TensorBoard callback
-    # tensorboard_callback = TensorBoardCallback(log_dir='./logs/tensorboard/')
-   
-    # Train the model with the callbacks
-    total_timesteps = 10000
-    #model.learn(total_timesteps=total_timesteps, callback=[checkpoint_callback, tensorboard_callback])
     
-    model.learn(total_timesteps=total_timesteps, progress_bar=True, tb_log_name="SAC_with_clutter",callback=checkpoint_callback)
+    for episode in range(1, episodes + 1):
+        obs = env.reset()
+        done = False
+        episode_reward = 0
+        c = 0
+        
+        while not done:
+            print("New state")
+            #env.render()
+            obs = {key: np.expand_dims(value, axis=0) for key, value in obs.items()}
+            action, _ = model.predict(obs)
+            print("action:",action)
+            obs, reward, done, info = env.step(action[0])
+            episode_reward += reward
+            c += 1
+            log_file.write(f'{episode}: "Reward: {reward} , Action:{action}\n')
+            log_file.flush()  # Flush to ensure the data is written immediately
 
-    # Save the trained model
-    model.save("niryo_sac_model")
-    print(f"Training completed for {total_timesteps} time steps")
-    
+        log_file.write(f'End of Episode: {episode}, Total_episode_reward: {episode_reward,} No of actions taken: {c}\n')
+
+    env.close()

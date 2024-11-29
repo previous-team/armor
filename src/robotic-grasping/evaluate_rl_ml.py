@@ -29,6 +29,8 @@ from scipy.spatial.transform import Rotation as R
 from skimage.feature import peak_local_max
 from utils.dataset_processing import image
 
+from niryo_robot_utils import NiryoRosWrapperException
+
 logging.basicConfig(level=logging.INFO)
 
 
@@ -343,7 +345,27 @@ class Graspable:
             
         return bool(len(grasps)) ,grasps
     
-    def pick(self, grasps, depth):
+    def go_to_home_position(self, niryo_robot, debug=False):
+        '''
+        Moves the robot to the home position
+        '''
+        try:
+            res = niryo_robot.move_joints(0, 0.5, -1.25, 0, 0, 0)
+            while not res or res[0] != 1:
+                res = niryo_robot.move_joints(0, 0.5, -1.25, 0, 0, 0)
+            if debug:
+                print("Moved to home position")
+        except NiryoRosWrapperException as e:
+            print(f"Error occurred: {e}")
+            niryo_robot.clear_collision_detected()
+            rospy.sleep(1)
+            res = self.go_to_home_position(niryo_robot=niryo_robot, debug=debug)
+            if not res or res[0] != 1:
+                print("Error moving to home position")
+
+        return res
+    
+    def pick(self, niryo_robot, grasps, depth):
         for g in grasps:
             fx = 462.1379699707031
             fy = 462.1379699707031
@@ -373,22 +395,30 @@ class Graspable:
             # Convert the object position from the camera frame to the world frame
             x, y, z = camera_to_world(object_position, camera_pose)
 
-            print("Grasp at: ", x, y, z)
+            object_position = np.array([x, y, z])
+            object_orientation= np.array([x, y, z, g.angle])
+           
+            x, y, z = object_position
+            print(x,y,z)
 
-            # Publish the grasp point
-            grasp_msg = PoseStamped()
-            grasp_msg.header.stamp = rospy.Time.now()
-            grasp_msg.pose.position.x = x
-            grasp_msg.pose.position.y = y
-            grasp_msg.pose.position.z = z
-                
-            # Orientation will be published later
-            grasp_msg.pose.orientation.x = quaternion[0]
-            grasp_msg.pose.orientation.y = quaternion[1]
-            grasp_msg.pose.orientation.z = quaternion[2]
-            grasp_msg.pose.orientation.w = quaternion[3]
+            # Open the gripper
+            niryo_robot.release_with_tool()
 
+            # Move to the object
+            niryo_robot.move_pose(x, y,max(z+0.07,0.09), 0.0, 1.57, g.angle)
 
-            self.grasp_pub.publish(grasp_msg)
+            # Picking
+            niryo_robot.grasp_with_tool()
+
+            # Move back to home position
+            self.go_to_home_position(niryo_robot) 
+
+            # Moving to place pose
+            niryo_robot.move_pose(0.0, 0.2, 0.2, 0.0, 1.57, 0)
+            # Placing !
+            niryo_robot.release_with_tool()
+
+            # Home postion
+            self.go_to_home_position(niryo_robot)
 
         return True
