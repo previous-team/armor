@@ -29,6 +29,8 @@ from scipy.spatial.transform import Rotation as R
 from skimage.feature import peak_local_max
 from utils.dataset_processing import image
 
+from niryo_robot_utils import NiryoRosWrapperException
+
 logging.basicConfig(level=logging.INFO)
 
 
@@ -343,6 +345,26 @@ class Graspable:
             
         return bool(len(grasps)) ,grasps
     
+    def go_to_home_position(self, niryo_robot, debug=False):
+        '''
+        Moves the robot to the home position
+        '''
+        try:
+            res = niryo_robot.move_joints(0, 0.5, -1.25, 0, 0, 0)
+            while not res or res[0] != 1:
+                res = niryo_robot.move_joints(0, 0.5, -1.25, 0, 0, 0)
+            if debug:
+                print("Moved to home position")
+        except NiryoRosWrapperException as e:
+            print(f"Error occurred: {e}")
+            niryo_robot.clear_collision_detected()
+            rospy.sleep(1)
+            res = self.go_to_home_position(debug=debug)
+            if not res or res[0] != 1:
+                print("Error moving to home position")
+
+        return res
+    
     def pick(self, niryo_robot, grasps, depth):
         for g in grasps:
             fx = 462.1379699707031
@@ -389,7 +411,7 @@ class Graspable:
             niryo_robot.grasp_with_tool()
 
             # Move back to home position
-            niryo_robot.move_joints(0, 0.5, -1.25, 0, 0, 0)   
+            self.go_to_home_position(niryo_robot) 
 
             # Moving to place pose
             niryo_robot.move_pose(0.0, 0.2, 0.2, 0.0, 1.57, 0)
@@ -397,6 +419,6 @@ class Graspable:
             niryo_robot.release_with_tool()
 
             # Home postion
-            niryo_robot.move_joints(0, 0.5, -1.25, 0, 0, 0)
+            self.go_to_home_position(niryo_robot)
 
         return True
