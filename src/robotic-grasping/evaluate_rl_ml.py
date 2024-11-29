@@ -359,7 +359,7 @@ class Graspable:
             print(f"Error occurred: {e}")
             niryo_robot.clear_collision_detected()
             rospy.sleep(1)
-            res = self.go_to_home_position(debug=debug)
+            res = self.go_to_home_position(niryo_robot=niryo_robot, debug=debug)
             if not res or res[0] != 1:
                 print("Error moving to home position")
 
