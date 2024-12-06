@@ -520,8 +520,8 @@ class NiryoRobotEnv(gym.Env):
             # Reward for increasing white pixel count
             if self.previous_white_pixel_count and ((self.current_white_pixel_count - self.previous_white_pixel_count) > 10):
                 reward += 2.0
-            elif self.previous_white_pixel_count and (self.current_white_pixel_count < self.previous_white_pixel_count):
-                reward += -1.0
+            # elif self.previous_white_pixel_count and (self.current_white_pixel_count < self.previous_white_pixel_count):
+            #     reward += -1.0
 
             # Reward for varying clutter density
             if self.current_white_pixel_count == 0:
@@ -562,16 +562,16 @@ if __name__ == "__main__":
 
     logdir = "logs"
     # Set up SAC model with a specified buffer size
-    model = SAC("MultiInputPolicy", env, verbose=1, buffer_size=50000, tensorboard_log=logdir)  # Set buffer size here
+    model = SAC("MultiInputPolicy", env, verbose=1,target_entropy = -env.action_space.shape[0], buffer_size=100000,gamma=0.98,normalize_rewards = True, tensorboard_log=logdir)  # Set buffer size here
 
     # Set up a checkpoint callback to save the model periodically
-    checkpoint_callback = CheckpointCallback(save_freq=1000, save_path='./logs/', name_prefix='niryo_sac_without_gray')
+    checkpoint_callback = CheckpointCallback(save_freq=10000, save_path='./logs/', name_prefix='niryo_sac_without_gray')
 
     # Set up a TensorBoard callback
     # tensorboard_callback = TensorBoardCallback(log_dir='./logs/tensorboard/')
    
     # Train the model with the callbacks
-    total_timesteps = 5000
+    total_timesteps = 30000
     #model.learn(total_timesteps=total_timesteps, callback=[checkpoint_callback, tensorboard_callback])
     
     model.learn(total_timesteps=total_timesteps, progress_bar=True, tb_log_name="SAC_without_gray", callback=checkpoint_callback)
