@@ -12,7 +12,7 @@ class RealSenseCamera:
                  #device_id,
                  width=640,
                  height=480,
-                 fps=6): #could increase the fps to 30 TODO check if 30 fps works good with the model
+                 fps=30): #could increase the fps to 30 TODO check if 30 fps works good with the model
         #self.device_id = device_id
         self.width = width
         self.height = height
