@@ -420,6 +420,7 @@ class NiryoRobotEnv(gym.Env):
             local_rgb_map=denormalised_rgb[
                 min(max(0, int(self.centroid[1] - self.local_clutter_radius)), 224):min(max(0, int(self.centroid[1] + self.local_clutter_radius)), 224), 
                 min(max(0, int(self.centroid[0] - self.local_clutter_radius)), 224):min(max(0, int(self.centroid[0] + self.local_clutter_radius)), 224)]
+
             local_clutter_map = calculate_pixel_clutter_density(local_rgb_map, local_depth_map, local=True)
             self.previous_local_clutter_density = self.current_local_clutter_density
             self.current_local_clutter_density = int(np.mean(local_clutter_map) * 100)
