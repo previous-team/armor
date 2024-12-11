@@ -522,8 +522,8 @@ class NiryoRobotEnv(gym.Env):
             # Reward for increasing white pixel count
             if self.previous_white_pixel_count and ((self.current_white_pixel_count - self.previous_white_pixel_count) > 10):
                 reward += 2.0
-            elif self.previous_white_pixel_count and (self.current_white_pixel_count < self.previous_white_pixel_count):
-                reward += -1.0
+            # elif self.previous_white_pixel_count and (self.current_white_pixel_count < self.previous_white_pixel_count):
+            #     reward += -1.0
 
             # Reward for varying clutter density
             if self.current_white_pixel_count == 0:
