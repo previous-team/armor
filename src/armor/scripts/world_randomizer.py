@@ -98,7 +98,8 @@ def handle_delete_and_spawn(req):
             models_to_spawn = [red_cube]
 
             # Randomize the number of additional models to spawn (between 10 and the max number of models - 1)
-            num_additional_models_to_spawn = random.randint(10, len(models) - 1)
+            # num_additional_models_to_spawn = random.randint(10, len(models) - 1)
+            num_additional_models_to_spawn = 25
             
             # Randomly select additional models to spawn
             additional_models_to_spawn = random.sample([model for model in models if model["model_name"] != "cube_red_spawned"], num_additional_models_to_spawn)
@@ -108,13 +109,16 @@ def handle_delete_and_spawn(req):
 
             # Iterate over the models to spawn and spawn each one at a random position and orientation
             for model in models_to_spawn:
-                x = random.uniform(0.17, 0.42)  # Randomize x position between 0.17 and 0.42
-                y = random.uniform(-0.12, 0.12)  # Randomize y position between -0.12 and 0.12
-                z = random.uniform(0.2, 0.4)  # Randomize z position between 0.2 and 0.4
+                # x = random.uniform(0.17, 0.42)  # Randomize x position between 0.17 and 0.42
+                # y = random.uniform(-0.12, 0.12)  # Randomize y position between -0.12 and 0.12
+                # z = random.uniform(0.2, 0.4)  # Randomize z position between 0.2 and 0.4
+                x = 0.29 # Randomize x position between 0.17 and 0.42
+                y = 0.0  # Randomize y position between -0.12 and 0.12
+                z = 0.1  # Randomize z position between 0.2 and 0.4
                 roll = 0  # Roll is 0
                 pitch = 0  # Pitch is 0
-                yaw = random.uniform(0, 2 * 3.14159)  # Randomize yaw between 0 and 2*pi
-
+                # yaw = random.uniform(0, 2 * 3.14159)  # Randomize yaw between 0 and 2*pi
+                yaw = 4  # Randomize yaw between 0 and 2*pi
                 spawn_model(model["sdf_file"], model["model_name"], x, y, z, roll, pitch, yaw)
 
             rospy.sleep(1) # Wait for the models to spawn
