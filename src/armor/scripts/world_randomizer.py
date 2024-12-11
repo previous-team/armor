@@ -99,7 +99,7 @@ def handle_delete_and_spawn(req):
 
             # Randomize the number of additional models to spawn (between 10 and the max number of models - 1)
             # num_additional_models_to_spawn = random.randint(10, len(models) - 1)
-            num_additional_models_to_spawn = 22
+            num_additional_models_to_spawn = 25
             
             # Randomly select additional models to spawn
             additional_models_to_spawn = random.sample([model for model in models if model["model_name"] != "cube_red_spawned"], num_additional_models_to_spawn)
