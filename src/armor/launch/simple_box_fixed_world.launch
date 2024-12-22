@@ -1,0 +1,53 @@
+<?xml version="1.0" ?>
+<!-- This launch file allows to run simulation on Gazebo
+Warning : Some errors are present in Gazebo
+-> It will log some errors because it cannot unload joint_controller (It's because ROS does it before Gazebo)
+-> Gazebo GUI is kinda bad on closing. It will always run into SIGTERM. So, what you should do is
+to change _TIMEOUT_SIGINT value in the file /opt/ros/noetic/lib/python2.7/dist-packages/roslaunch/nodeprocess.py
+This will reduce the amount of time spent waiting during program shutdown
+-->
+<launch xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:noNamespaceSchemaLocation="https://gist.githubusercontent.com/nalt/dfa2abc9d2e3ae4feb82ca5608090387/raw/roslaunch.xsd">
+    <env name="ROSCONSOLE_CONFIG_FILE"
+        value="$(find niryo_robot_bringup)/config/desktop_gazebo_simulation_trace.conf" />
+    <!-- Arguments definition -->
+    <arg name="log_level" default="ERROR" />
+    <arg name="hardware_version" default="ned2" />
+    <arg name="debug" default="false"/>
+    <arg name="gripper_n_camera" default="true"/>
+    <arg name="simu_conveyor" default="true"/>
+    <arg name="gui" default="true"/>
+    <arg name="conf_location" default="version.txt"/>
+    <arg name="world_name" default="cluttered1"/>
+
+    <arg name="model" default="$(find realsense2_description)/urdf/test_d435_camera_no_gravity_simple_box.urdf.xacro"/>
+
+    <!-- robot description to load in rviz or gazebo -->
+    <param name="realsense_robot_description" command="$(find xacro)/xacro $(arg model)" />
+
+    <!-- Define most of ROS parameters -->
+    <include file="$(find niryo_robot_bringup)/launch/niryo_$(arg hardware_version)_simulation.launch">
+        <arg name="simu_gripper" value="$(arg gripper_n_camera)"/>
+        <arg name="simu_conveyor" value="$(arg simu_conveyor)"/>
+        <arg name="log_level" value="$(arg log_level)" />
+        <arg name="debug" value="$(arg debug)"/>
+        <arg name="gazebo" value="true" />
+    </include>
+
+    <!-- Launching Gazebo World -->
+    <include file="$(find armor)/launch/niryo_robot_gazebo_world.launch.xml">
+        <arg name="gui" value="$(arg gui)"/>
+        <arg name="world_name" value="$(arg world_name)"/>
+
+    </include>
+
+    <param name="/niryo_robot_vision/initialized" type="bool" value="true" unless="$(arg gripper_n_camera)"/>
+
+      <!-- push robot_description to factory and spawn robot in gazebo -->
+      <node name="urdf_spawner" pkg="gazebo_ros" type="spawn_model"
+        args="-x 0.3 -y 0.0 -z 0.55 -P 1.57 -Y 3.14159 -unpause -urdf -model robot -param realsense_robot_description" respawn="false" output="screen" />
+
+    <!-- Adding python nodes to be launched-->
+    <node name="world_randomizer" pkg="armor" type="world_randomizer.py" />
+
+</launch>
