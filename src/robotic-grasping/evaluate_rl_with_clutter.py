@@ -2,6 +2,7 @@ import rospy
 import argparse
 import numpy as np
 import math
+import time
 import cv2
 from niryo_robot_python_ros_wrapper import *
 from niryo_robot_utils import NiryoRosWrapperException
@@ -582,6 +583,15 @@ if __name__ == "__main__":
         done = False
         episode_reward = 0
         c = 0
+        print("First state in episode")
+        obs = {key: np.expand_dims(value, axis=0) for key, value in obs.items()}
+        action, _ = model.predict(obs)
+        start_time = time.time()
+        obs, reward, done, info = env.step(action[0])
+        episode_reward += reward
+        c += 1
+        log_file.write(f'{episode}: Reward: {reward} , Action: {action}\n')
+        log_file.flush()
         
         while not done:
             print("New state")
@@ -595,6 +605,10 @@ if __name__ == "__main__":
             log_file.write(f'{episode}: "Reward: {reward} , Action:{action}\n')
             log_file.flush()  # Flush to ensure the data is written immediately
 
-        log_file.write(f'End of Episode: {episode}, Total_episode_reward: {episode_reward,} No of actions taken: {c}\n')
+        end_time = time.time()
+        elapsed_time = end_time - start_time
+
+        log_file.write(f'End of Episode: {episode}, Total_episode_reward: {episode_reward}, '
+                    f'No of actions taken: {c}, Time taken: {elapsed_time:.2f} seconds\n')
 
     env.close()
