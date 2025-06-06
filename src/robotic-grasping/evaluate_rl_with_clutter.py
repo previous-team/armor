@@ -265,6 +265,7 @@ class NiryoRobotEnv(gym.Env):
             'centroid': spaces.Box(low=centroid_low, high=centroid_high, shape=(2,), dtype=np.int16),  # 2D centroid (X, Y)
             'clutter_density': spaces.Box(low=clutter_density_low, high=clutter_density_high, shape=(img_height, img_width, 1), dtype=np.float32)
         })
+    
 
         # Initilaise the Model for Graspable
         self.grasp_model = Graspable(network_path=self.args.network, force_cpu=self.args.force_cpu)
@@ -514,7 +515,7 @@ class NiryoRobotEnv(gym.Env):
 
         # Check if the target object is graspable
         if self.graspable:
-            reward += 15.0
+            reward += 25.0
             self.done = True
             rospy.loginfo(f"Ending episode as target object is graspable after actions taken by the bot")
         # Reward for varying white pixel count or clutter density if timestep > 1
@@ -535,7 +536,7 @@ class NiryoRobotEnv(gym.Env):
                 if self.previous_local_clutter_density and (self.current_local_clutter_density < self.previous_local_clutter_density):
                     reward += 3.0
                 elif self.previous_local_clutter_density and (self.current_local_clutter_density >= self.previous_local_clutter_density):
-                    reward += -1.0
+                    reward += -2.0
         # Check if the episode has reached the maximum steps
         if self.current_step >= self.max_episode_steps:
             # reward += -5.0
@@ -559,7 +560,17 @@ if __name__ == "__main__":
 
     # Create an environment instance
     env = NiryoRobotEnv()
-    model = SAC.load("/path/to/saved/model")
+    observation_space = env.observation_space
+    action_space = env.action_space
+
+    model = SAC.load(
+        "/path/to/saved/model",
+        print_system_info=True,
+        custom_objects={
+            "observation_space": observation_space,
+            "action_space": action_space
+        }
+    )
 
     log_file = open('model_eval.txt', 'a')  # TODO: Change the name as model{number}_eval.txt
 
