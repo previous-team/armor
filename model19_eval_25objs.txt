@@ -1,0 +1,257 @@
+1: Reward: 27.0 , Action: [[0.92788494 0.7183282  0.472312   0.192723   0.23711619]]
+End of Episode: 1, Total_episode_reward: 27.0, No of actions taken: 1, Time taken: 25.35 seconds, Graspable: True
+2: Reward: -3.0 , Action: [[0.9977198  0.58544284 0.38587087 0.21792772 0.9190656 ]]
+2: "Reward: -2.0 , Action:[[0.90100217 0.8170582  0.21104184 0.08605653 0.48355964]]
+2: "Reward: 3.0 , Action:[[0.8421719  0.06471944 0.3493216  0.19164997 0.9655329 ]]
+2: "Reward: -2.0 , Action:[[0.40410054 0.7628293  0.09373882 0.06252211 0.88696826]]
+2: "Reward: -4.0 , Action:[[0.88610256 0.13901931 0.7680644  0.46314275 0.8744129 ]]
+End of Episode: 2, Total_episode_reward: -8.0, No of actions taken: 5, Time taken: 47.38 seconds, Graspable: False
+3: Reward: 27.0 , Action: [[0.513483   0.22932875 0.10113665 0.7026644  0.43143266]]
+End of Episode: 3, Total_episode_reward: 27.0, No of actions taken: 1, Time taken: 24.73 seconds, Graspable: True
+4: Reward: -2.0 , Action: [[0.62406135 0.6585493  0.34547395 0.8258736  0.98245925]]
+4: "Reward: -2.0 , Action:[[0.92722046 0.03644148 0.00933012 0.6835979  0.95860374]]
+4: "Reward: 2.0 , Action:[[0.64935124 0.27211174 0.01341307 0.9303603  0.93971455]]
+4: "Reward: -2.0 , Action:[[0.52554035 0.0781042  0.39762512 0.81737804 0.5110909 ]]
+4: "Reward: -4.0 , Action:[[0.8363514  0.7920685  0.08661646 0.6550457  0.9658543 ]]
+End of Episode: 4, Total_episode_reward: -8.0, No of actions taken: 5, Time taken: 51.61 seconds, Graspable: False
+5: Reward: -2.0 , Action: [[0.08104852 0.9570926  0.08442292 0.26360798 0.61483234]]
+5: "Reward: -2.0 , Action:[[0.40623665 0.29049593 0.13140726 0.8098474  0.7231767 ]]
+5: "Reward: -3.0 , Action:[[0.33852625 0.6828787  0.16976044 0.8848513  0.97786355]]
+5: "Reward: -4.0 , Action:[[0.7186319  0.8974923  0.23579946 0.55493474 0.9454161 ]]
+5: "Reward: -5.0 , Action:[[0.7154476  0.60871255 0.1826708  0.5509243  0.90217686]]
+End of Episode: 5, Total_episode_reward: -16.0, No of actions taken: 5, Time taken: 54.86 seconds, Graspable: False
+6: Reward: -2.0 , Action: [[0.3485114  0.10846496 0.41114813 0.3984487  0.1791839 ]]
+6: "Reward: 2.0 , Action:[[0.50930834 0.71344495 0.01916906 0.41585395 0.36456084]]
+6: "Reward: 5.0 , Action:[[0.9949934  0.7364749  0.0109002  0.8249185  0.67542493]]
+6: "Reward: -2.0 , Action:[[0.6012302  0.10557389 0.0339545  0.31975552 0.9451798 ]]
+6: "Reward: 5.0 , Action:[[0.9828615  0.6142261  0.288989   0.93232137 0.2996446 ]]
+End of Episode: 6, Total_episode_reward: 8.0, No of actions taken: 5, Time taken: 47.26 seconds, Graspable: False
+7: Reward: -2.0 , Action: [[0.7317487  0.82573557 0.43436632 0.78710544 0.03591132]]
+7: "Reward: 27.0 , Action:[[0.8457672  0.62737453 0.34052935 0.7819583  0.9473004 ]]
+End of Episode: 7, Total_episode_reward: 25.0, No of actions taken: 2, Time taken: 33.44 seconds, Graspable: True
+8: Reward: 28.0 , Action: [[0.5578762  0.1561636  0.09001404 0.7692593  0.96246505]]
+End of Episode: 8, Total_episode_reward: 28.0, No of actions taken: 1, Time taken: 26.01 seconds, Graspable: True
+9: Reward: -2.0 , Action: [[0.32733998 0.3121789  0.78418314 0.9775604  0.2655902 ]]
+9: "Reward: 0.0 , Action:[[0.18303081 0.12948233 0.15226138 0.78432935 0.5344233 ]]
+9: "Reward: 2.0 , Action:[[0.2621086  0.23166132 0.05549842 0.8390552  0.6247938 ]]
+9: "Reward: 27.0 , Action:[[0.3134197  0.55600715 0.02383089 0.7711419  0.49693078]]
+End of Episode: 9, Total_episode_reward: 27.0, No of actions taken: 4, Time taken: 53.78 seconds, Graspable: True
+10: Reward: -2.0 , Action: [[0.01643375 0.5909983  0.12791783 0.2827708  0.83563113]]
+10: "Reward: -2.0 , Action:[[0.15518743 0.9160161  0.00644043 0.79055643 0.25208735]]
+10: "Reward: -2.0 , Action:[[0.02375418 0.8722414  0.20961124 0.75176024 0.60386604]]
+10: "Reward: 0.0 , Action:[[0.36386186 0.7546898  0.08344826 0.25244868 0.69136447]]
+10: "Reward: -2.0 , Action:[[0.68467474 0.59949267 0.01542225 0.75840086 0.9907603 ]]
+End of Episode: 10, Total_episode_reward: -8.0, No of actions taken: 5, Time taken: 41.21 seconds, Graspable: False
+11: Reward: 1.0 , Action: [[0.75161123 0.5046791  0.02886206 0.5879925  0.950217  ]]
+11: "Reward: 28.0 , Action:[[0.2857887  0.27147484 0.1722408  0.7494004  0.8816241 ]]
+End of Episode: 11, Total_episode_reward: 29.0, No of actions taken: 2, Time taken: 38.57 seconds, Graspable: True
+12: Reward: -2.0 , Action: [[0.97722673 0.13796854 0.19274646 0.9441388  0.9443089 ]]
+12: "Reward: 0.0 , Action:[[0.4542013  0.41405353 0.12113231 0.8100431  0.5846942 ]]
+12: "Reward: -3.0 , Action:[[0.8246851  0.17538893 0.04168978 0.7314451  0.7862643 ]]
+12: "Reward: 3.0 , Action:[[0.8706001  0.699617   0.50354755 0.8414714  0.99883986]]
+12: "Reward: -2.0 , Action:[[0.47321433 0.2788394  0.37751198 0.4439722  0.97110176]]
+End of Episode: 12, Total_episode_reward: -4.0, No of actions taken: 5, Time taken: 52.35 seconds, Graspable: False
+13: Reward: -4.0 , Action: [[0.942847   0.31088942 0.4680194  0.671368   0.8096951 ]]
+13: "Reward: -4.0 , Action:[[0.99312633 0.18274128 0.05329704 0.38782918 0.977045  ]]
+13: "Reward: -4.0 , Action:[[0.902582   0.15209147 0.12703651 0.4287874  0.9049268 ]]
+13: "Reward: -2.0 , Action:[[0.87284327 0.4624028  0.3608997  0.23204657 0.49141127]]
+13: "Reward: -2.0 , Action:[[0.53265846 0.4266205  0.03185073 0.86429524 0.88008714]]
+End of Episode: 13, Total_episode_reward: -16.0, No of actions taken: 5, Time taken: 58.99 seconds, Graspable: False
+14: Reward: 3.0 , Action: [[0.82034695 0.71743906 0.33318582 0.983726   0.82977223]]
+14: "Reward: 2.0 , Action:[[0.35265988 0.16376656 0.79638845 0.9348904  0.85767066]]
+14: "Reward: 3.0 , Action:[[0.14276168 0.20770591 0.07748538 0.09388223 0.66384315]]
+14: "Reward: -2.0 , Action:[[0.62663186 0.8101553  0.29020286 0.48675025 0.96005833]]
+14: "Reward: -2.0 , Action:[[0.457048   0.8019165  0.30122757 0.04572684 0.88408947]]
+End of Episode: 14, Total_episode_reward: 4.0, No of actions taken: 5, Time taken: 43.99 seconds, Graspable: False
+15: Reward: -2.0 , Action: [[0.21164119 0.25894594 0.34242755 0.06828123 0.5068895 ]]
+15: "Reward: -2.0 , Action:[[0.0697749  0.11011949 0.1679883  0.09610006 0.9539218 ]]
+15: "Reward: -2.0 , Action:[[0.953755   0.16152689 0.04037344 0.97557116 0.992542  ]]
+15: "Reward: -2.0 , Action:[[0.567353   0.6017857  0.32558668 0.32809144 0.87681377]]
+15: "Reward: 22.0 , Action:[[0.4954403  0.9585329  0.28465393 0.7815738  0.97549844]]
+End of Episode: 15, Total_episode_reward: 14.0, No of actions taken: 5, Time taken: 58.89 seconds, Graspable: True
+16: Reward: 2.0 , Action: [[0.41281515 0.4256137  0.2376129  0.15108094 0.6741459 ]]
+16: "Reward: 30.0 , Action:[[0.5771584  0.4763084  0.1877788  0.07734272 0.853976  ]]
+End of Episode: 16, Total_episode_reward: 32.0, No of actions taken: 2, Time taken: 32.79 seconds, Graspable: True
+17: Reward: -3.0 , Action: [[0.75923437 0.46893138 0.06497744 0.20999539 0.8106077 ]]
+17: "Reward: -4.0 , Action:[[0.9792995  0.2659117  0.05729902 0.45843598 0.7454653 ]]
+17: "Reward: 3.0 , Action:[[0.8508023  0.43215647 0.35472956 0.78276527 0.93336606]]
+17: "Reward: -2.0 , Action:[[0.63699555 0.6269844  0.2941591  0.7383618  0.80190396]]
+17: "Reward: -2.0 , Action:[[0.74555826 0.7840019  0.3374377  0.84048676 0.82731724]]
+End of Episode: 17, Total_episode_reward: -8.0, No of actions taken: 5, Time taken: 44.57 seconds, Graspable: False
+18: Reward: 0.0 , Action: [[0.17961505 0.45896375 0.28446704 0.50376135 0.87105274]]
+18: "Reward: -2.0 , Action:[[0.8895113  0.5652386  0.3698548  0.26113898 0.9119909 ]]
+18: "Reward: -2.0 , Action:[[0.49329194 0.15566388 0.20651466 0.7727773  0.2045201 ]]
+18: "Reward: -2.0 , Action:[[0.45731908 0.2289744  0.01725987 0.01777059 0.5902419 ]]
+18: "Reward: -2.0 , Action:[[0.8282909  0.7937851  0.6081584  0.35110605 0.71092355]]
+End of Episode: 18, Total_episode_reward: -8.0, No of actions taken: 5, Time taken: 44.65 seconds, Graspable: False
+19: Reward: -2.0 , Action: [[0.91666853 0.1484049  0.25542608 0.15065143 0.6909822 ]]
+19: "Reward: -3.0 , Action:[[0.73388016 0.87916684 0.69365287 0.8428257  0.9008641 ]]
+19: "Reward: -5.0 , Action:[[0.9895153  0.2276659  0.02412033 0.36156157 0.47090402]]
+19: "Reward: 3.0 , Action:[[0.749618   0.5559488  0.1110245  0.86205614 0.9376049 ]]
+19: "Reward: -3.0 , Action:[[0.8174485  0.2540179  0.01108372 0.24349749 0.69551635]]
+End of Episode: 19, Total_episode_reward: -10.0, No of actions taken: 5, Time taken: 51.55 seconds, Graspable: False
+20: Reward: 3.0 , Action: [[0.5470029  0.4467075  0.84872246 0.6722107  0.9771359 ]]
+20: "Reward: -2.0 , Action:[[0.23439863 0.24769923 0.19028273 0.04058641 0.567425  ]]
+20: "Reward: 3.0 , Action:[[0.10110641 0.5717526  0.1031687  0.34664613 0.97279   ]]
+20: "Reward: -2.0 , Action:[[0.6518254  0.15801165 0.04422918 0.10614043 0.8609279 ]]
+20: "Reward: -2.0 , Action:[[0.4652494  0.43532118 0.27563673 0.6885328  0.6823176 ]]
+End of Episode: 20, Total_episode_reward: 0.0, No of actions taken: 5, Time taken: 42.63 seconds, Graspable: False
+21: Reward: -2.0 , Action: [[0.636594   0.28366262 0.45149186 0.20182398 0.3502953 ]]
+21: "Reward: 27.0 , Action:[[0.21254995 0.22555357 0.02707127 0.20334    0.6890396 ]]
+End of Episode: 21, Total_episode_reward: 25.0, No of actions taken: 2, Time taken: 34.54 seconds, Graspable: True
+22: Reward: -2.0 , Action: [[0.66511256 0.3774625  0.14622954 0.6113659  0.6117458 ]]
+22: "Reward: -2.0 , Action:[[0.95504487 0.86930054 0.03226405 0.96574795 0.44434622]]
+22: "Reward: -2.0 , Action:[[0.71745753 0.67137796 0.5027035  0.06510505 0.7257748 ]]
+22: "Reward: -3.0 , Action:[[0.2580518  0.85458815 0.05767897 0.73819166 0.6841912 ]]
+22: "Reward: 1.0 , Action:[[0.96451473 0.11574876 0.27066064 0.33949056 0.3394395 ]]
+End of Episode: 22, Total_episode_reward: -8.0, No of actions taken: 5, Time taken: 54.35 seconds, Graspable: False
+23: Reward: 23.0 , Action: [[0.1507999  0.7097362  0.17647043 0.410938   0.91465706]]
+End of Episode: 23, Total_episode_reward: 23.0, No of actions taken: 1, Time taken: 25.18 seconds, Graspable: True
+24: Reward: -2.0 , Action: [[0.8064015  0.6192156  0.21562317 0.0204725  0.98955977]]
+24: "Reward: 5.0 , Action:[[0.72251403 0.05756932 0.0254558  0.8559984  0.74068767]]
+24: "Reward: 3.0 , Action:[[0.80072397 0.82909846 0.63819724 0.23278973 0.86317086]]
+24: "Reward: -2.0 , Action:[[0.6052092  0.00552511 0.10179552 0.29505056 0.708536  ]]
+24: "Reward: -2.0 , Action:[[0.30410033 0.35297    0.57148236 0.80915046 0.7514932 ]]
+End of Episode: 24, Total_episode_reward: 2.0, No of actions taken: 5, Time taken: 45.17 seconds, Graspable: False
+25: Reward: -2.0 , Action: [[0.98859024 0.9088993  0.12136325 0.8856433  0.11987615]]
+25: "Reward: -2.0 , Action:[[0.6302777  0.36546224 0.02138636 0.13315499 0.9214978 ]]
+25: "Reward: -2.0 , Action:[[0.4820698  0.21257469 0.19081661 0.17787108 0.74974   ]]
+25: "Reward: -2.0 , Action:[[0.14097401 0.03774875 0.20613417 0.95800126 0.4152689 ]]
+25: "Reward: -4.0 , Action:[[0.9700875  0.7773926  0.07072294 0.39878425 0.558509  ]]
+End of Episode: 25, Total_episode_reward: -12.0, No of actions taken: 5, Time taken: 45.13 seconds, Graspable: False
+26: Reward: -2.0 , Action: [[0.98922586 0.5481436  0.09858093 0.9628968  0.95160705]]
+26: "Reward: -2.0 , Action:[[0.6892275  0.32614344 0.01561955 0.8854955  0.8959211 ]]
+26: "Reward: -3.0 , Action:[[0.9338034  0.61457795 0.04983556 0.28261173 0.72288764]]
+26: "Reward: -2.0 , Action:[[0.77192366 0.9877358  0.00482503 0.56316936 0.39329246]]
+26: "Reward: -2.0 , Action:[[0.57115614 0.6213337  0.00104216 0.55843055 0.6429507 ]]
+End of Episode: 26, Total_episode_reward: -11.0, No of actions taken: 5, Time taken: 48.04 seconds, Graspable: False
+27: Reward: -2.0 , Action: [[0.90802443 0.6056376  0.5624889  0.552988   0.17427787]]
+27: "Reward: -3.0 , Action:[[0.31527618 0.05224359 0.8535945  0.30321276 0.7534262 ]]
+27: "Reward: 2.0 , Action:[[0.77393794 0.12444758 0.24917486 0.6160953  0.7482978 ]]
+27: "Reward: -2.0 , Action:[[0.8211236  0.51338696 0.15886068 0.91209155 0.9674033 ]]
+27: "Reward: -3.0 , Action:[[0.69958484 0.63157266 0.01158646 0.80789423 0.936218  ]]
+End of Episode: 27, Total_episode_reward: -8.0, No of actions taken: 5, Time taken: 47.19 seconds, Graspable: False
+28: Reward: -2.0 , Action: [[0.23736033 0.833376   0.07938126 0.4952418  0.95790195]]
+28: "Reward: -2.0 , Action:[[0.09962344 0.52748644 0.01154047 0.02761737 0.436571  ]]
+28: "Reward: -2.0 , Action:[[0.74934953 0.40065932 0.082582   0.36455494 0.03283891]]
+28: "Reward: -2.0 , Action:[[0.14697772 0.7687501  0.07728016 0.2369419  0.6398513 ]]
+28: "Reward: 5.0 , Action:[[0.63673353 0.10643277 0.22165975 0.13737735 0.98384655]]
+End of Episode: 28, Total_episode_reward: -3.0, No of actions taken: 5, Time taken: 46.82 seconds, Graspable: False
+29: Reward: -2.0 , Action: [[0.49536484 0.07690522 0.5145415  0.09396359 0.9794519 ]]
+29: "Reward: -2.0 , Action:[[0.7332314  0.7883017  0.44742006 0.48571047 0.5751292 ]]
+29: "Reward: 5.0 , Action:[[0.6848055  0.05466837 0.125117   0.7717147  0.8929161 ]]
+29: "Reward: 23.0 , Action:[[0.9703726  0.6219638  0.15773576 0.21717244 0.41743904]]
+End of Episode: 29, Total_episode_reward: 24.0, No of actions taken: 4, Time taken: 54.44 seconds, Graspable: True
+30: Reward: -2.0 , Action: [[0.4649269  0.1722326  0.02665019 0.5103624  0.5919914 ]]
+30: "Reward: -3.0 , Action:[[0.28983366 0.10109082 0.00768101 0.33965206 0.97483987]]
+30: "Reward: 0.0 , Action:[[0.01771083 0.9819167  0.05682525 0.13609847 0.98600936]]
+30: "Reward: -2.0 , Action:[[0.72475266 0.18841314 0.45925748 0.19530168 0.7571286 ]]
+30: "Reward: -2.0 , Action:[[0.589485   0.36399662 0.44178942 0.07396743 0.77317977]]
+End of Episode: 30, Total_episode_reward: -9.0, No of actions taken: 5, Time taken: 46.22 seconds, Graspable: False
+31: Reward: -4.0 , Action: [[0.05818316 0.937305   0.4352879  0.03383759 0.7968726 ]]
+31: "Reward: -2.0 , Action:[[0.15572307 0.17317122 0.03220481 0.9494065  0.3676659 ]]
+31: "Reward: 3.0 , Action:[[0.9129815  0.532405   0.20717436 0.09653658 0.8087949 ]]
+31: "Reward: 30.0 , Action:[[0.19875067 0.680272   0.06508243 0.25336808 0.92665184]]
+End of Episode: 31, Total_episode_reward: 27.0, No of actions taken: 4, Time taken: 53.35 seconds, Graspable: True
+32: Reward: -2.0 , Action: [[0.89160013 0.23127818 0.01432869 0.8354146  0.78158617]]
+32: "Reward: -2.0 , Action:[[0.68927085 0.27476817 0.07913524 0.11337006 0.8161851 ]]
+32: "Reward: -2.0 , Action:[[0.510922   0.7321085  0.05953476 0.8625042  0.97382116]]
+32: "Reward: -2.0 , Action:[[0.98481774 0.4894507  0.02723807 0.13374296 0.9532705 ]]
+32: "Reward: -2.0 , Action:[[0.9070413  0.80769646 0.11424059 0.28194174 0.35691833]]
+End of Episode: 32, Total_episode_reward: -10.0, No of actions taken: 5, Time taken: 48.43 seconds, Graspable: False
+33: Reward: -3.0 , Action: [[0.62037486 0.32796878 0.63689756 0.6935068  0.6483046 ]]
+33: "Reward: 5.0 , Action:[[0.9568057  0.6203693  0.24335802 0.06316432 0.9764529 ]]
+33: "Reward: 3.0 , Action:[[0.95820546 0.01704067 0.07714647 0.7146164  0.89722013]]
+33: "Reward: -2.0 , Action:[[0.3799861 0.1070053 0.0538725 0.4046311 0.7625806]]
+33: "Reward: 2.0 , Action:[[0.49105102 0.852455   0.10757679 0.06026092 0.8618077 ]]
+End of Episode: 33, Total_episode_reward: 5.0, No of actions taken: 5, Time taken: 47.19 seconds, Graspable: False
+34: Reward: -2.0 , Action: [[0.2568531  0.28597882 0.27253318 0.08447564 0.9715795 ]]
+34: "Reward: -2.0 , Action:[[0.19798374 0.7611712  0.27965772 0.9313324  0.9653441 ]]
+34: "Reward: -2.0 , Action:[[0.55305845 0.7494557  0.8356923  0.6408478  0.8778145 ]]
+34: "Reward: -2.0 , Action:[[0.12865746 0.06728247 0.16289553 0.56661814 0.84678465]]
+34: "Reward: -2.0 , Action:[[0.66353106 0.6505187  0.13551179 0.71300346 0.57987005]]
+End of Episode: 34, Total_episode_reward: -10.0, No of actions taken: 5, Time taken: 44.42 seconds, Graspable: False
+35: Reward: -4.0 , Action: [[0.043349   0.01689878 0.3001021  0.9091219  0.9282673 ]]
+35: "Reward: -3.0 , Action:[[0.63554597 0.77165914 0.04677373 0.28813022 0.7973822 ]]
+35: "Reward: -2.0 , Action:[[0.9056505  0.8732642  0.02508572 0.85996735 0.17686832]]
+35: "Reward: 0.0 , Action:[[0.9696146  0.13512868 0.36150604 0.3262724  0.3697018 ]]
+35: "Reward: -3.0 , Action:[[0.6216643  0.9380622  0.04900509 0.04317945 0.88330466]]
+End of Episode: 35, Total_episode_reward: -12.0, No of actions taken: 5, Time taken: 63.12 seconds, Graspable: False
+36: Reward: 3.0 , Action: [[0.81333315 0.0667313  0.00458893 0.27349204 0.65228623]]
+36: "Reward: -2.0 , Action:[[0.20340195 0.36201704 0.06225348 0.27101293 0.820899  ]]
+36: "Reward: -2.0 , Action:[[0.29421598 0.8347625  0.16217223 0.11072102 0.50569934]]
+36: "Reward: -2.0 , Action:[[0.53350127 0.8579086  0.05701542 0.7493789  0.83559847]]
+36: "Reward: 3.0 , Action:[[0.8025117  0.4685309  0.17370799 0.92008317 0.30234265]]
+End of Episode: 36, Total_episode_reward: 0.0, No of actions taken: 5, Time taken: 43.56 seconds, Graspable: False
+37: Reward: -2.0 , Action: [[0.9420276  0.10176596 0.01265046 0.77528995 0.6592077 ]]
+37: "Reward: -3.0 , Action:[[0.565224   0.75316316 0.39510626 0.64512587 0.91207623]]
+37: "Reward: -3.0 , Action:[[0.1732561  0.20479867 0.01887637 0.7936072  0.9304756 ]]
+37: "Reward: -3.0 , Action:[[0.79543567 0.50981957 0.61975205 0.37393975 0.6696478 ]]
+37: "Reward: 5.0 , Action:[[0.20436996 0.8651743  0.08682832 0.3726736  0.97933674]]
+End of Episode: 37, Total_episode_reward: -6.0, No of actions taken: 5, Time taken: 51.82 seconds, Graspable: False
+38: Reward: 3.0 , Action: [[0.3354621  0.24133411 0.26308602 0.03885242 0.81010485]]
+38: "Reward: 22.0 , Action:[[0.49672464 0.51567554 0.47516704 0.14458972 0.9219555 ]]
+End of Episode: 38, Total_episode_reward: 25.0, No of actions taken: 2, Time taken: 33.72 seconds, Graspable: True
+39: Reward: 3.0 , Action: [[0.14620227 0.82688653 0.134675   0.9506222  0.7896991 ]]
+39: "Reward: -2.0 , Action:[[0.45514324 0.3131875  0.03326261 0.8930274  0.47822368]]
+39: "Reward: 5.0 , Action:[[0.9454851  0.31116772 0.30023408 0.96566665 0.8185234 ]]
+39: "Reward: 5.0 , Action:[[0.21912041 0.38789853 0.02345684 0.39432597 0.9665177 ]]
+39: "Reward: -2.0 , Action:[[0.8210971  0.13797483 0.71699333 0.82837015 0.79138446]]
+End of Episode: 39, Total_episode_reward: 9.0, No of actions taken: 5, Time taken: 45.12 seconds, Graspable: False
+40: Reward: -2.0 , Action: [[0.7266752  0.39735284 0.0127736  0.19512048 0.4571339 ]]
+40: "Reward: -2.0 , Action:[[0.44854048 0.95447993 0.07689336 0.3066853  0.26797998]]
+40: "Reward: -5.0 , Action:[[0.8348577  0.08619833 0.21262458 0.6111516  0.96766895]]
+40: "Reward: -2.0 , Action:[[0.14389405 0.40203357 0.19517756 0.3813148  0.9862719 ]]
+40: "Reward: -2.0 , Action:[[0.16983953 0.20198819 0.17260048 0.4526088  0.89734083]]
+End of Episode: 40, Total_episode_reward: -13.0, No of actions taken: 5, Time taken: 47.99 seconds, Graspable: False
+41: Reward: -5.0 , Action: [[0.92139876 0.58179206 0.03717381 0.6415574  0.8819914 ]]
+41: "Reward: 3.0 , Action:[[0.16248974 0.91851133 0.4717512  0.03184342 0.42511135]]
+41: "Reward: -2.0 , Action:[[0.31567204 0.96956384 0.03207457 0.7268075  0.5771657 ]]
+41: "Reward: -2.0 , Action:[[0.6915099 0.4944594 0.2922438 0.3156379 0.8190661]]
+41: "Reward: -4.0 , Action:[[0.9526454  0.04000255 0.34040487 0.46896666 0.94891584]]
+End of Episode: 41, Total_episode_reward: -10.0, No of actions taken: 5, Time taken: 45.46 seconds, Graspable: False
+42: Reward: 27.0 , Action: [[0.4124918  0.7467346  0.52998173 0.90945977 0.78436923]]
+End of Episode: 42, Total_episode_reward: 27.0, No of actions taken: 1, Time taken: 22.94 seconds, Graspable: True
+43: Reward: -3.0 , Action: [[0.8358877  0.23900399 0.10238197 0.902694   0.971854  ]]
+43: "Reward: 0.0 , Action:[[0.86598504 0.06073695 0.1915161  0.5115937  0.911107  ]]
+43: "Reward: 3.0 , Action:[[0.12574598 0.28130943 0.34059337 0.38858327 0.5213042 ]]
+43: "Reward: 3.0 , Action:[[0.60376835 0.8012601  0.08780903 0.78660834 0.45718998]]
+43: "Reward: 2.0 , Action:[[0.25418025 0.6935347  0.02888691 0.71141547 0.94905126]]
+End of Episode: 43, Total_episode_reward: 5.0, No of actions taken: 5, Time taken: 44.53 seconds, Graspable: False
+44: Reward: -2.0 , Action: [[0.49556237 0.27333182 0.1379497  0.7061991  0.97313905]]
+44: "Reward: -2.0 , Action:[[0.29429102 0.5990882  0.0476867  0.8999777  0.9291787 ]]
+44: "Reward: -2.0 , Action:[[0.55416393 0.01452407 0.04396191 0.81144214 0.92323816]]
+44: "Reward: -2.0 , Action:[[0.7698873  0.96891683 0.2392905  0.3476474  0.9184272 ]]
+44: "Reward: -2.0 , Action:[[0.3945193  0.16844025 0.02179629 0.2748765  0.97049224]]
+End of Episode: 44, Total_episode_reward: -10.0, No of actions taken: 5, Time taken: 42.66 seconds, Graspable: False
+45: Reward: -2.0 , Action: [[0.6927975  0.18323523 0.07446319 0.23841596 0.3599771 ]]
+45: "Reward: -2.0 , Action:[[0.9373486  0.69224185 0.35525775 0.11572859 0.6934233 ]]
+45: "Reward: -2.0 , Action:[[0.75409853 0.06349546 0.16347703 0.87245053 0.9513475 ]]
+45: "Reward: -2.0 , Action:[[0.60226893 0.8475404  0.21857053 0.7056123  0.7802346 ]]
+45: "Reward: 3.0 , Action:[[0.14062926 0.97073925 0.49213699 0.9718269  0.98693323]]
+End of Episode: 45, Total_episode_reward: -5.0, No of actions taken: 5, Time taken: 48.40 seconds, Graspable: False
+46: Reward: -2.0 , Action: [[0.86488485 0.4596408  0.38259533 0.7914729  0.7423358 ]]
+46: "Reward: -2.0 , Action:[[0.10129875 0.01627982 0.84569657 0.38282987 0.98776746]]
+46: "Reward: 3.0 , Action:[[0.777646   0.24344894 0.05518162 0.7049166  0.5933471 ]]
+46: "Reward: -2.0 , Action:[[0.11612073 0.8616406  0.14946634 0.23870426 0.1437673 ]]
+46: "Reward: -3.0 , Action:[[0.4136213  0.938414   0.07226589 0.62885475 0.3342753 ]]
+End of Episode: 46, Total_episode_reward: -6.0, No of actions taken: 5, Time taken: 41.53 seconds, Graspable: False
+47: Reward: -2.0 , Action: [[0.61681145 0.01896289 0.64350253 0.3464688  0.09780693]]
+47: "Reward: 23.0 , Action:[[0.35603178 0.73664176 0.48206037 0.94360363 0.9593935 ]]
+End of Episode: 47, Total_episode_reward: 21.0, No of actions taken: 2, Time taken: 31.06 seconds, Graspable: True
+48: Reward: 3.0 , Action: [[0.3737439  0.12642062 0.57445633 0.482529   0.87808967]]
+48: "Reward: -2.0 , Action:[[0.2970354  0.17646837 0.11902896 0.2308828  0.82555723]]
+48: "Reward: 23.0 , Action:[[0.7774525  0.3910119  0.08357632 0.9756275  0.99021757]]
+End of Episode: 48, Total_episode_reward: 24.0, No of actions taken: 3, Time taken: 45.67 seconds, Graspable: True
+49: Reward: -4.0 , Action: [[0.96132815 0.85255516 0.15198594 0.42499042 0.93334   ]]
+49: "Reward: -5.0 , Action:[[0.9925179  0.8555412  0.1747742  0.46480873 0.85950017]]
+49: "Reward: -2.0 , Action:[[0.19058907 0.7618687  0.34421176 0.17049047 0.83832955]]
+49: "Reward: -2.0 , Action:[[0.3223882  0.16981721 0.82248336 0.7644043  0.4016671 ]]
+49: "Reward: -5.0 , Action:[[0.9734224  0.6883774  0.177901   0.33641398 0.61320007]]
+End of Episode: 49, Total_episode_reward: -18.0, No of actions taken: 5, Time taken: 52.22 seconds, Graspable: False
+50: Reward: -4.0 , Action: [[0.95682514 0.50107753 0.08991763 0.6461916  0.78145254]]
+50: "Reward: 3.0 , Action:[[0.5551202  0.21477872 0.05583823 0.03803572 0.8527969 ]]
+50: "Reward: -3.0 , Action:[[0.06099889 0.19584298 0.15219733 0.06449491 0.42411292]]
+50: "Reward: 3.0 , Action:[[0.7109412  0.01583368 0.01350015 0.90156996 0.96362615]]
+50: "Reward: -2.0 , Action:[[0.06182328 0.03820947 0.29039368 0.09975216 0.71841574]]
+End of Episode: 50, Total_episode_reward: -3.0, No of actions taken: 5, Time taken: 46.21 seconds, Graspable: False
