@@ -2,6 +2,7 @@ import rospy
 import argparse
 import numpy as np
 import math
+import sys
 import cv2
 from niryo_robot_python_ros_wrapper import *
 from niryo_robot_utils import NiryoRosWrapperException
@@ -559,7 +560,7 @@ if __name__ == "__main__":
 
     # Create an environment instance
     env = NiryoRobotEnv()
-    model = SAC.load("/path/to/saved/model")
+    model = SAC.load(sys.argv[1])  # Or just replace with the trained model path
 
     log_file = open('model_eval.txt', 'a')  # TODO: Change the name as model{number}_eval.txt
 
