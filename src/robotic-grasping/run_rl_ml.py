@@ -4,6 +4,7 @@ import argparse
 import logging
 import math
 
+import cv2
 import matplotlib.pyplot as plt
 import numpy as np
 import torch.utils.data
@@ -144,49 +145,43 @@ def filter_grasps(grasps, img, depth_img, fx, fy, ppx, ppy, red_thresh=0, green_
             img[1, cy, cx] > green_thresh and 
             img[2, cy, cx] > blue_thresh):
             
-            
-            center=[cx,cy]
-            depth=depth_img[cy, cx]
-            center_position = deproject_pixel_to_point(depth, center, ppx, ppy, fx, fy)
-            # Draw rectangle points
-            rect_points = draw_rectangle(center_position, g.angle, g.length, g.width)
-            #print("Rectanngle points", rect_points)
-            
-            pixel_points=[]
-            for pt in rect_points:
-                p_p=project_point_to_pixel(depth, pt, ppx, ppy, fx, fy)
-                pixel_points.append(p_p)
-            print("Pixel_points:",pixel_points)
+            angles = np.linspace(0, np.pi, 18) # 18 angles for the rectangle
+            # Insert obtained angle from ML to the first index
+            angles = np.insert(angles, 0, g.angle)
+
+            # Check if it is graspable at any angle
+            for angle in angles:
+                center=[cx,cy]
+                depth=depth_img[cy, cx]
+                center_position = deproject_pixel_to_point(depth, center, ppx, ppy, fx, fy)
+                # Draw rectangle points
+                rect_points = draw_rectangle(center_position, g.angle, g.length, g.width)
                 
-            
-            #print("length:",g.length)
-            #print("width:",g.width)
-            #print(rect_points)
-            
-            # Check depth constraint
-            center_depth = depth_img[cy, cx]
-            #print("Center:",center_depth)
-            is_valid_grasp = True
-            
-            for x in range(0,len(rect_points)):
-                # Sample points from center to each rectangle corner
-                p1=pixel_points[x]
-                p2=pixel_points[(x+2)%4]
-                print("p1:",p1)
-                print("p2:",p2)
-                line_points = sample_points_along_line(p1, p2, num_depth_checks)
-                for pt in line_points:
-                    y,x = int(pt[0]), int(pt[1])
-                    #print(depth_img[y,x])
-                    #if 0 <= x < depth_img.shape[1] and 0 <= y < depth_img.shape[0]:
-                    if (0 <= x < 224) and (0 <= y < 224) and depth_img[y, x] <= center_depth:
-                        #print("not graspable at pts:",(x,y))
-                        is_valid_grasp = False
-                        break
+                pixel_points=[]
+                for pt in rect_points:
+                    p_p=project_point_to_pixel(depth, pt, ppx, ppy, fx, fy)
+                    pixel_points.append(p_p)
                 
-            
-            if is_valid_grasp:
-                filtered_grasps.append(g)
+                # Check depth constraint
+                center_depth = depth_img[cy, cx]
+                is_valid_grasp = True
+                
+                for x in range(0,len(rect_points)):
+                    # Sample points from center to each rectangle corner
+                    p1=pixel_points[x]
+                    p2=pixel_points[(x+2)%4]
+                    line_points = sample_points_along_line(p1, p2, num_depth_checks)
+                    for pt in line_points:
+                        y,x = int(pt[0]), int(pt[1])
+                        if (0 <= x < 224) and (0 <= y < 224) and depth_img[y, x] <= center_depth:
+                            is_valid_grasp = False
+                            break
+                    
+                
+                if is_valid_grasp:
+                    g.angle = angle  # Update the angle
+                    filtered_grasps.append(g)
+                    break
 
     return filtered_grasps
 
@@ -263,9 +258,33 @@ def z_detect_grasps(rgb_img, depth, q_img, ang_img, width_img=None, no_grasps=1)
         grasp_msg.pose.orientation.z = quaternion[2]
         grasp_msg.pose.orientation.w = quaternion[3]
 
-        grasp_pub.publish(grasp_msg)
+        # grasp_pub.publish(grasp_msg)
 
     return filtered_grasps
+
+def get_target_centroid(rgb_img):
+
+    # Convert to HSV image
+    hsv_img = cv2.cvtColor(rgb_img, cv2.COLOR_RGB2HSV)
+    # Color range for the target object
+    lower_red_1 = np.array([0, 120, 70])
+    upper_red_1 = np.array([10, 255, 255])
+    lower_red_2 = np.array([170, 120, 70])
+    upper_red_2 = np.array([180, 255, 255])
+
+    # Create a mask for the red color
+    mask1 = cv2.inRange(hsv_img, lower_red_1, upper_red_1)
+    mask2 = cv2.inRange(hsv_img, lower_red_2, upper_red_2)
+    mask_image = mask1 | mask2
+
+    # Calculate the centroid of the mask return (-1, -1) if no mask
+    if mask_image.sum() == 0:
+        return (-1, -1)
+    M = cv2.moments(mask_image)
+    cx = int(M["m10"] / M["m00"])
+    cy = int(M["m01"] / M["m00"])
+
+    return (cy, cx)
 
 
 def parse_args():
@@ -283,70 +302,44 @@ def parse_args():
 
     args = parser.parse_args()
     return args
-    
+
+class Graspable:
+    def __init__(self, network_path, force_cpu=False):
+        # Initialize necessary components and load the model
+        self.force_cpu = force_cpu
+        logging.info('Connecting to camera...')
+
+        # Load the neural network model
+        logging.info('Loading model...')
+        if torch.cuda.is_available() and not force_cpu:
+            self.net = torch.load(network_path)
+        else:
+            self.net = torch.load(network_path, map_location=torch.device('cpu'))
+
+        logging.info('Model loaded successfully.')
+
+        # Get the compute device
+        self.device = get_device(force_cpu)
+
+    def run_graspable(self, x, depth_image, denormalised_depth, rgb_img, denormalised_rgb):
+        # Run the grasp detection logic
+        with torch.no_grad():
+            xc = x.to(self.device)
+            pred = self.net.predict(xc)
+
+            # Post-process the network output
+            q_img, ang_img, width_img = post_process_output(pred['pos'], pred['cos'], pred['sin'], pred['width'])
+            grasps = z_detect_grasps(rgb_img, denormalised_depth, q_img, ang_img, width_img=None, no_grasps=10)
+
+            if not len(grasps):
+                # Get the target objects centroid
+                target_centroid = get_target_centroid(denormalised_rgb)
+
+                # Filter out grasps that are not on the object or obstructed by depth
+                grasps = filter_grasps([Grasp(center=target_centroid, angle=0)], rgb_img, denormalised_depth, 462.1379699707031, 462.1379699707031, 111, 111)
+
+            
+        return bool(len(grasps))
 
 
-if __name__ == '__main__':
-    args = parse_args()
 
-    # Connect to Camera
-    logging.info('Connecting to camera...')
-
-    # Initialize ROS node
-    rospy.init_node('run_gazebo', anonymous=True)
-
-    cam = ROSCameraSubscriber(
-        depth_topic='/camera/depth/image_raw',  
-        rgb_topic='/camera/color/image_raw'    
-    )
-
-    cam_data = CameraData(include_depth=args.use_depth, include_rgb=args.use_rgb)
-
-    # Grasp point publisher
-    grasp_pub = rospy.Publisher('/grasp_point', PoseStamped, queue_size=10)
-
-    # Load Network
-    logging.info('Loading model...')
-
-    if torch.cuda.is_available() and not args.force_cpu:
-        net = torch.load(args.network)
-    else:
-        net = torch.load(args.network, map_location=torch.device('cpu'))
-
-    logging.info('Done')
-
-    # Get the compute device
-    device = get_device(args.force_cpu)
-
-    try:
-        fig = plt.figure(figsize=(10, 10))
-        while True:
-            image_bundle = cam.get_image_bundle()
-            if image_bundle is None:
-                rospy.loginfo("Waiting for images...")
-                continue
-
-            rgb = image_bundle['rgb']
-            depth = image_bundle['aligned_depth']
-           
-            x, depth_img, denormalised_depth, rgb_img = cam_data.get_data(rgb=rgb, depth=depth)
-
-            with torch.no_grad():
-                xc = x.to(device)
-                pred = net.predict(xc)
-
-                q_img, ang_img, width_img = post_process_output(pred['pos'], pred['cos'], pred['sin'], pred['width'])
-                grasps=z_detect_grasps(rgb_img, denormalised_depth, q_img, ang_img, width_img=None, no_grasps=10)
-
-
-                plot_results(fig=fig,
-                             rgb_img=cam_data.get_rgb(rgb, False),
-                             depth_img=np.squeeze(denormalised_depth),
-                             grasp_q_img=q_img,
-                             grasp_angle_img=ang_img,
-                             no_grasps=10,
-                             grasp_width_img=width_img,
-                             grasps=grasps)
-                
-    finally:
-        pass

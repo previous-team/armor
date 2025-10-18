@@ -1,11 +1,20 @@
+#!/usr/bin/env python3
+
 import rospy
+import rospkg
 import random
-import signal
 from gazebo_msgs.srv import SpawnModel, DeleteModel
 from geometry_msgs.msg import Pose
+from gazebo_msgs.msg import ModelStates
+from armor.srv import delete_and_spawn_models, delete_and_spawn_modelsResponse
+import tf.transformations as tf_trans
 
 # Initialize the ROS node
-rospy.init_node('spawn_and_delete_objects')
+rospy.init_node('delete_and_spawn_objects')
+
+# Get the path to the package
+rospack = rospkg.RosPack()
+package_path = rospack.get_path('armor')
 
 # Wait for the spawn and delete services to be available
 rospy.wait_for_service('/gazebo/spawn_sdf_model')
@@ -19,20 +28,37 @@ except rospy.ServiceException:
 
 # List of SDF files and corresponding model names
 models = [
-    {"sdf_file": "src/armor/models/cube_blue/model.sdf", "model_name": "cube_blue_spawned1"},
-    {"sdf_file": "src/armor/models/cube_red/model.sdf", "model_name": "cube_red_spawned"},
-    {"sdf_file": "src/armor/models/cube_green/model.sdf", "model_name": "cube_green_spawned"},
-    {"sdf_file": "src/armor/models/cuboid_blue/model.sdf", "model_name": "cuboid_blue_spawned"},
-    {"sdf_file": "src/armor/models/cuboid_green/model.sdf", "model_name": "cuboid_green_spawned"},
-    {"sdf_file": "src/armor/models/cube_blue/model.sdf", "model_name": "cube_blue_spawned2"},
-    {"sdf_file": "src/armor/models/cube_green/model.sdf", "model_name": "cube_green_spawned2"},
-    {"sdf_file": "src/armor/models/cube_green/model.sdf", "model_name": "cube_green_spawned3"},
-    {"sdf_file": "src/armor/models/cuboid_blue/model.sdf", "model_name": "cuboid_blue_spawned2"},
-    {"sdf_file": "src/armor/models/cuboid_green/model.sdf", "model_name": "cuboid_green_spawned2"}
+    {"sdf_file": f"{package_path}/models/cube_blue/model.sdf", "model_name": "cube_blue_spawned1"},
+    {"sdf_file": f"{package_path}/models/cube_red/model.sdf", "model_name": "cube_red_spawned"},
+    {"sdf_file": f"{package_path}/models/cube_green/model.sdf", "model_name": "cube_green_spawned"},
+    {"sdf_file": f"{package_path}/models/cuboid_blue/model.sdf", "model_name": "cuboid_blue_spawned"},
+    {"sdf_file": f"{package_path}/models/cuboid_green/model.sdf", "model_name": "cuboid_green_spawned"},
+    {"sdf_file": f"{package_path}/models/cube_blue/model.sdf", "model_name": "cube_blue_spawned2"},
+    {"sdf_file": f"{package_path}/models/cube_green/model.sdf", "model_name": "cube_green_spawned2"},
+    {"sdf_file": f"{package_path}/models/cube_green/model.sdf", "model_name": "cube_green_spawned3"},
+    {"sdf_file": f"{package_path}/models/cuboid_blue/model.sdf", "model_name": "cuboid_blue_spawned2"},
+    {"sdf_file": f"{package_path}/models/cuboid_green/model.sdf", "model_name": "cuboid_green_spawned2"},
+    {"sdf_file": f"{package_path}/models/cube_blue/model.sdf", "model_name": "cube_blue_spawned"},
+    {"sdf_file": f"{package_path}/models/cuboid_green/model.sdf", "model_name": "cuboid_green_spawned3"},
+    {"sdf_file": f"{package_path}/models/cube_green/model.sdf", "model_name": "cube_green_spawned4"},
+    {"sdf_file": f"{package_path}/models/cuboid_blue/model.sdf", "model_name": "cuboid_blue_spawned3"},
+    {"sdf_file": f"{package_path}/models/cube_blue/model.sdf", "model_name": "cube_blue_spawned3"},
+    {"sdf_file": f"{package_path}/models/cube_blue/model.sdf", "model_name": "cube_blue_spawned4"},
+    {"sdf_file": f"{package_path}/models/cuboid_green/model.sdf", "model_name": "cuboid_green_spawned4"},
+    {"sdf_file": f"{package_path}/models/cuboid_blue/model.sdf", "model_name": "cuboid_blue_spawned4"},
+    {"sdf_file": f"{package_path}/models/cube_blue/model.sdf", "model_name": "cube_blue_spawned5"},
+    {"sdf_file": f"{package_path}/models/cube_blue/model.sdf", "model_name": "cube_blue_spawned6"},
+    {"sdf_file": f"{package_path}/models/cuboid_green/model.sdf", "model_name": "cuboid_green_spawned5"},
+    {"sdf_file": f"{package_path}/models/cuboid_blue/model.sdf", "model_name": "cuboid_blue_spawned5"},
+    {"sdf_file": f"{package_path}/models/cuboid_blue/model.sdf", "model_name": "cuboid_blue_spawned5"},
+    {"sdf_file": f"{package_path}/models/cube_blue/model.sdf", "model_name": "cube_blue_spawned6"},
+    {"sdf_file": f"{package_path}/models/cube_blue/model.sdf", "model_name": "cube_blue_spawned7"},
+    {"sdf_file": f"{package_path}/models/cuboid_green/model.sdf", "model_name": "cuboid_green_spawned6"},
+    {"sdf_file": f"{package_path}/models/cuboid_blue/model.sdf", "model_name": "cuboid_blue_spawned6"}
 ]
 
 # Function to spawn a model
-def spawn_model(sdf_file, model_name, x, y, z):
+def spawn_model(sdf_file, model_name, x, y, z, roll, pitch, yaw):
     with open(sdf_file, "r") as file:
         model_xml = file.read()
 
@@ -40,6 +66,13 @@ def spawn_model(sdf_file, model_name, x, y, z):
     model_pose.position.x = x
     model_pose.position.y = y
     model_pose.position.z = z
+
+    # Convert roll, pitch, yaw to quaternion
+    quaternion = tf_trans.quaternion_from_euler(roll, pitch, yaw)
+    model_pose.orientation.x = quaternion[0]
+    model_pose.orientation.y = quaternion[1]
+    model_pose.orientation.z = quaternion[2]
+    model_pose.orientation.w = quaternion[3]
 
     resp = spawn_model_prox(model_name, model_xml, "", model_pose, "world")
     print(f"Spawned {model_name}: {resp}")
@@ -52,59 +85,54 @@ def delete_model(model_name):
     except rospy.ServiceException as e:
         print(f"Service call failed for {model_name}: {e}")
 
-# Signal handler for graceful shutdown
-def signal_handler(sig, frame):
-    print("Shutting down gracefully...")
-    rospy.signal_shutdown("User interrupted the program")
+# Service callback function
+def handle_delete_and_spawn(req):
+    try:
+        while True:
+        # Delete all models
+            for model in models:
+                delete_model(model["model_name"])
 
-# Register the signal handler
-signal.signal(signal.SIGINT, signal_handler)
+            # Always include the red cube
+            red_cube = [model for model in models if model["model_name"] == "cube_red_spawned"][0]
+            models_to_spawn = [red_cube]
 
-while not rospy.is_shutdown():
-    # # Spawn the red cube first
-    # red_cube = next(model for model in models if model["model_name"] == "cube_red_spawned")
-    # red_x = random.uniform(0.2, 0.3)  # Randomize x position between 0.2 and 0.3
-    # red_y = random.uniform(-0.09, 0.09)  # Randomize y position between -0.1 and 0.1
-    # red_z = random.uniform(0.1, 0.35)  # Randomize z position between 0.1 and 0.3
-    # spawn_model(red_cube["sdf_file"], red_cube["model_name"], red_x, red_y, red_z)
+            # Randomize the number of additional models to spawn (between 10 and the max number of models - 1)
+            num_additional_models_to_spawn = random.randint(10, len(models) - 1)
+            
+            # Randomly select additional models to spawn
+            additional_models_to_spawn = random.sample([model for model in models if model["model_name"] != "cube_red_spawned"], num_additional_models_to_spawn)
+            
+            # Combine the red cube with the additional models
+            models_to_spawn.extend(additional_models_to_spawn)
 
-    # # Remove the red cube from the list
-    # models_without_red = [model for model in models if model["model_name"] != "cube_red_spawned"]
+            # Iterate over the models to spawn and spawn each one at a random position and orientation
+            for model in models_to_spawn:
+                x = random.uniform(0.17, 0.42)  # Randomize x position between 0.17 and 0.42
+                y = random.uniform(-0.12, 0.12)  # Randomize y position between -0.12 and 0.12
+                z = random.uniform(0.2, 0.4)  # Randomize z position between 0.2 and 0.4
+                roll = 0  # Roll is 0
+                pitch = 0  # Pitch is 0
+                yaw = random.uniform(0, 2 * 3.14159)  # Randomize yaw between 0 and 2*pi
 
-    # # Iterate over the models and spawn each one around the red cube
-    # for model in models_without_red:
-    #     x = random.uniform(red_x - 0.05, red_x + 0.05)  # Randomize x position around the red cube
-    #     y = random.uniform(red_y - 0.05, red_y + 0.05)  # Randomize y position around the red cube
-    #     z = random.uniform(0.1, 0.35)  # Randomize z position between 0.1 and 0.3
-    #     spawn_model(model["sdf_file"], model["model_name"], x, y, z)
+                spawn_model(model["sdf_file"], model["model_name"], x, y, z, roll, pitch, yaw)
 
-     # Always include the red cube
-    red_cube = next(model for model in models if model["model_name"] == "cube_red_spawned")
-    models_to_spawn = [red_cube]
+            rospy.sleep(1) # Wait for the models to spawn
+            # Check if the red cube is within the workspace boundaries
+            red_cube_pose = rospy.wait_for_message(f'/gazebo/model_states', ModelStates)
+            red_cube_index = red_cube_pose.name.index("cube_red_spawned")
+            red_cube_position = red_cube_pose.pose[red_cube_index].position
 
-    # Randomize the number of additional models to spawn (between 6 and the max number of models - 1)
-    num_additional_models_to_spawn = random.randint(6, len(models) - 1)
-    
-    # Randomly select additional models to spawn
-    additional_models_to_spawn = random.sample([model for model in models if model["model_name"] != "cube_red_spawned"], num_additional_models_to_spawn)
-    
-    # Combine the red cube with the additional models
-    models_to_spawn.extend(additional_models_to_spawn)
+            if 0.17 <= red_cube_position.x <= 0.42 and -0.12 <= red_cube_position.y <= 0.12:
+                break  # Red cube is within the workspace, exit the loop
 
-    # Iterate over the models to spawn and spawn each one at a random position
-    for model in models_to_spawn:
-        x = random.uniform(0.2, 0.35)  # Randomize x position between 0.2 and 0.4
-        y = random.uniform(-0.085, 0.085)  # Randomize y position between -0.1 and 0.1
-        z = random.uniform(0.2, 0.45)  # Randomize z position between 0.1 and 0.3
-        spawn_model(model["sdf_file"], model["model_name"], x, y, z)
 
-    # Wait for 10 seconds
-    rospy.sleep(10)
+        return delete_and_spawn_modelsResponse(status="Success")
+    except Exception as e:
+        return delete_and_spawn_modelsResponse(status=f"Failed: {e}")
 
-    # Delete all models
-    for model in models:
-        delete_model(model["model_name"])
-        if model["model_name"] != "cube_red_spawned":
-            for i in range(1, 4):  # Assuming you have up to 3 instances of each model
-                instance_name = f"{model['model_name']}_{i}"
-                delete_model(instance_name)
+# Create the service
+service = rospy.Service('delete_and_spawn_models', delete_and_spawn_models, handle_delete_and_spawn)
+
+# Keep the node running
+rospy.spin()

@@ -9,7 +9,7 @@
     <arg name="debug" default="false"/>
 
     <!-- Workspace options as flags -->
-    <arg name="world_name" default="custom_lit"/>
+    <arg name="world_name" default="custom_lit_empty"/>
 
     <!-- Include the world file dynamically based on the set world_name -->
     <include file="$(find gazebo_ros)/launch/empty_world.launch">

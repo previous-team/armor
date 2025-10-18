@@ -1,1 +1,0 @@
-m, s = np.nanmean(depth), np.nanstd(depth)
