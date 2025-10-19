@@ -185,7 +185,29 @@ python3 src/robotic-grasping/run_rl_sac_with_clutter.py
 python3 src/robotic-grasping/evaluate_rl_sac_with_clutter.py <path_to_trained_model>
 ```
 
+
+
+
+
 __Note__: Add the below lines to bashrc for custom objects for niryo simulation
 ```bash
 export GAZEBO_MODEL_PATH=${GAZEBO_MODEL_PATH}:~/<your workspace>/src/armor/models
 ```
+
+
+## Authors
+
+- **Sanraj Lachhiramka**  
+  [LinkedIn](https://www.linkedin.com/in/sanraj-lachhiramka-2210a9248/) | [Email](mailto:sanrajlachhiramka@gmail.com)
+ 
+- **Pradeep J**  
+  [LinkedIn](https://www.linkedin.com/in/pradeep-j-565673254/) | [Email](mailto:pradeepj6685@gmail.com)
+
+- **Archanaa Chandaragi**  
+  [LinkedIn](https://www.linkedin.com/in/archanaa-chandaragi-a56166288/) | [Email](mailto:archanaachandaragi0108@gmail.com)
+
+- **Arjun Achar**  
+  [LinkedIn](https://www.linkedin.com/in/arjunachar/) | [Email](mailto:arjun.achar03@gmail.com)
+
+- **Dr. Shikha Tripathi**  
+  [LinkedIn](https://www.linkedin.com/in/shikha-tripathi-829a5a17/) | [Email](mailto:shikha@pes.edu)
